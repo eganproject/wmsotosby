@@ -1,0 +1,116 @@
+/**
+ * Penyelarasan tampilan flatpickr dan Tom Select dengan tema hitam-putih.
+ * Keduanya membawa CSS bawaan, jadi di sini hanya penyesuaian seperlunya.
+ */
+@import 'flatpickr/dist/flatpickr.min.css';
+@import 'tom-select/dist/css/tom-select.css';
+
+@layer components {
+    /* ---------------------------------------------------- Tom Select ---- */
+
+    .ts-wrapper {
+        @apply w-full;
+    }
+
+    .ts-wrapper .ts-control {
+        @apply min-h-[2.625rem] rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm text-ink-950 shadow-soft transition;
+    }
+
+    .ts-wrapper.focus .ts-control {
+        @apply border-ink-950 ring-1 ring-ink-950;
+    }
+
+    .ts-wrapper.disabled .ts-control {
+        @apply bg-ink-50 text-ink-400 opacity-100;
+    }
+
+    .ts-control input,
+    .ts-control input::placeholder {
+        @apply text-sm text-ink-950 placeholder:text-ink-300;
+    }
+
+    /* Ditempel ke <body>, jadi harus berada di atas panel dan modal biasa. */
+    .ts-dropdown {
+        @apply z-[60] mt-1 overflow-hidden rounded-xl border border-ink-100 bg-white shadow-lift;
+    }
+
+    .ts-dropdown .option {
+        @apply px-3 py-2 text-sm text-ink-700;
+    }
+
+    .ts-dropdown .active {
+        @apply bg-ink-950 text-white;
+    }
+
+    .ts-dropdown .option[data-selectable].active .highlight {
+        @apply bg-white/20 text-white;
+    }
+
+    .ts-dropdown .highlight {
+        @apply rounded bg-amber-100 text-ink-950;
+    }
+
+    .ts-dropdown .ts-empty,
+    .ts-dropdown .no-results {
+        @apply px-3 py-3 text-center text-xs text-ink-400;
+    }
+
+    .ts-dropdown-content {
+        @apply scrollbar-thin max-h-64;
+    }
+
+    /* Pilihan yang tak tersedia, mis. barang yang sudah dipakai baris lain. */
+    .ts-dropdown .option[data-disabled] {
+        @apply cursor-not-allowed text-ink-300;
+    }
+
+    /* ---------------------------------------------------- flatpickr ----- */
+
+    .flatpickr-calendar {
+        @apply rounded-2xl border border-ink-100 bg-white shadow-lift;
+    }
+
+    .flatpickr-calendar::before,
+    .flatpickr-calendar::after {
+        display: none !important;
+    }
+
+    .flatpickr-months .flatpickr-month {
+        @apply rounded-t-2xl bg-ink-950 text-white;
+    }
+
+    .flatpickr-current-month .flatpickr-monthDropdown-months,
+    .flatpickr-current-month input.cur-year {
+        @apply text-sm font-semibold text-white;
+    }
+
+    .flatpickr-months .flatpickr-prev-month svg,
+    .flatpickr-months .flatpickr-next-month svg {
+        fill: #fff;
+    }
+
+    .flatpickr-weekday {
+        @apply text-[11px] font-semibold uppercase tracking-wider text-ink-400;
+    }
+
+    .flatpickr-day {
+        @apply rounded-lg text-sm text-ink-700;
+    }
+
+    .flatpickr-day:hover {
+        @apply bg-ink-100;
+    }
+
+    .flatpickr-day.today {
+        @apply border-ink-300 font-semibold;
+    }
+
+    .flatpickr-day.selected,
+    .flatpickr-day.selected:hover {
+        @apply border-ink-950 bg-ink-950 text-white;
+    }
+
+    .flatpickr-day.flatpickr-disabled {
+        @apply text-ink-200;
+    }
+}

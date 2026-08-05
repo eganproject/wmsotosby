@@ -1,0 +1,95 @@
+@import './enhance.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    html {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+        @apply bg-white text-ink-950 antialiased;
+    }
+
+    /* Hide the native clear/reveal buttons so inputs stay visually consistent. */
+    input[type='search']::-webkit-search-cancel-button {
+        @apply appearance-none;
+    }
+
+    [x-cloak] {
+        display: none !important;
+    }
+}
+
+@layer components {
+    .scrollbar-thin {
+        scrollbar-width: thin;
+        scrollbar-color: theme('colors.ink.200') transparent;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar {
+        @apply h-1.5 w-1.5;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+        @apply rounded-full bg-ink-200;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+
+    /* --- Indikator navigasi AJAX ------------------------------------- */
+
+    /* Garis tipis di paling atas layar; tidak menggeser layout apa pun. */
+    #page-progress {
+        @apply pointer-events-none fixed inset-x-0 top-0 z-[100] h-0.5 w-0 opacity-0;
+        background: linear-gradient(90deg, theme('colors.ink.400'), theme('colors.ink.950'));
+        box-shadow: 0 0 10px rgb(10 10 10 / 0.35);
+        transition: width 0.2s ease, opacity 0.25s ease;
+    }
+
+    /* Konten meredup hanya bila permintaan terasa lambat. */
+    [data-navigating='true'] #page-content {
+        @apply pointer-events-none opacity-50;
+    }
+
+    #page-content {
+        transition: opacity 0.2s ease;
+    }
+
+    /* Tombol yang sedang memproses: ikonnya berganti spinner. */
+    [data-busy] {
+        @apply pointer-events-none;
+    }
+
+    [data-busy] > svg {
+        display: none;
+    }
+
+    [data-busy]::before {
+        content: '';
+        @apply h-4 w-4 shrink-0 rounded-full border-2 border-current;
+        border-top-color: transparent;
+        animation: spinner 0.6s linear infinite;
+    }
+
+    @keyframes spinner {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #page-progress,
+    #page-content {
+        transition: none;
+    }
+
+    [data-busy]::before {
+        animation-duration: 1.5s;
+    }
+}
