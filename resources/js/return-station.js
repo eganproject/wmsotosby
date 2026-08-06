@@ -15,6 +15,7 @@
  * sisanya terhadap jumlah yang tertulis pada resi.
  */
 import { announce as signal, timestamp } from './feedback';
+import { cameraState } from './scan-state';
 
 export default function returnStation(config) {
     return {
@@ -399,6 +400,10 @@ export default function returnStation(config) {
         },
 
         focusInput() {
+            // Saat memindai lewat kamera, memfokuskan kolom teks akan
+            // memunculkan papan ketik yang menutupi tampilan kamera.
+            if (cameraState.open) return;
+
             this.$nextTick(() => this.$refs.input?.focus());
         },
     };

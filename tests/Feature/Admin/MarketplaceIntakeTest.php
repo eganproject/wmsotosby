@@ -274,6 +274,61 @@ class MarketplaceIntakeTest extends TestCase
             ->assertDontSee($done->tracking_number);
     }
 
+    /**
+     * Paket yang scannya sudah tuntas tidak boleh dibuka ulang.
+     *
+     * Dokumennya masih draft karena menunggu diproses di antrean, dan tanpa
+     * penjagaan ini scan resi kedua menghapus seluruh hasil QC lalu memulai
+     * dari nol — tanpa pemberitahuan apa pun.
+     */
+    public function test_a_finished_package_is_not_reopened_by_scanning_its_waybill_again(): void
+    {
+        $this->giveStock(10);
+        $this->importOrder('SPXID111', [['FLT-OLI-STD', 2]]);
+
+        $this->actingAs($this->admin)->postJson(route('admin.outbounds.marketplace.store'), ['code' => 'SPXID111']);
+
+        $outbound = Outbound::latest('id')->firstOrFail();
+        $this->scanItem($outbound, 'FLT-OLI-STD');
+        $this->scanItem($outbound, 'FLT-OLI-STD');
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.marketplace.store'), ['code' => 'SPXID111'])
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'errors.code.0',
+                "Resi ini sudah selesai discan pada {$outbound->code} dan menunggu diproses di antrean Siap Dikirim.",
+            );
+
+        // Hasil scannya utuh, bukan direset diam-diam.
+        $outbound->refresh()->load('items');
+
+        $this->assertSame(2, $outbound->totalScanned());
+        $this->assertSame(1, Outbound::where('tracking_number', 'SPXID111')->count());
+        $this->assertTrue(Outbound::readyToShip()->whereKey($outbound->id)->exists());
+    }
+
+    /**
+     * Paket yang scannya belum tuntas tetap boleh dilanjutkan — itu justru
+     * cara melanjutkan pekerjaan yang tertunda.
+     */
+    public function test_a_half_scanned_package_can_still_be_resumed(): void
+    {
+        $this->giveStock(10);
+        $this->importOrder('SPXID111', [['FLT-OLI-STD', 3]]);
+
+        $this->actingAs($this->admin)->postJson(route('admin.outbounds.marketplace.store'), ['code' => 'SPXID111']);
+
+        $outbound = Outbound::latest('id')->firstOrFail();
+        $this->scanItem($outbound, 'FLT-OLI-STD');
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.marketplace.store'), ['code' => 'SPXID111'])
+            ->assertOk();
+
+        $this->assertSame(1, Outbound::where('tracking_number', 'SPXID111')->count());
+    }
+
     public function test_scanning_the_same_waybill_twice_reuses_the_draft(): void
     {
         $this->giveStock(5);

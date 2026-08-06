@@ -16,6 +16,7 @@
  *    gudang harus tetap bekerja saat jaringan luar tidak bisa dijangkau.
  */
 import { announce as signal } from './feedback';
+import { cameraState } from './scan-state';
 
 /** Format yang dipakai marketplace: resi 1D, dan QR pada label. */
 const FORMATS = ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'itf', 'codabar', 'upc_a', 'upc_e'];
@@ -78,6 +79,10 @@ export default function cameraScanner() {
             this.busy = true;
             this.error = '';
 
+            // Papan ketik yang terlanjur terbuka menutupi tampilan kamera.
+            cameraState.open = true;
+            document.activeElement?.blur?.();
+
             try {
                 this.stream = await navigator.mediaDevices.getUserMedia({
                     // Kamera belakang; kalau tidak ada, peramban memilih yang tersedia.
@@ -132,13 +137,16 @@ export default function cameraScanner() {
 
         /**
          * Satu label terbaca berkali-kali dalam sedetik. Kode yang sama
-         * diabaikan sebentar supaya tidak terkirim berulang, tetapi kode
-         * berbeda langsung diteruskan tanpa jeda.
+         * diabaikan sejenak supaya tidak terkirim berulang, tetapi jedanya
+         * pendek: barang kembar memang perlu discan beruntun, dan menunggu
+         * lama di antara dua barang identik justru memperlambat QC.
+         *
+         * Kode berbeda selalu diteruskan tanpa jeda sama sekali.
          */
         accept(code) {
             const now = Date.now();
 
-            if (code === this.last.code && now - this.last.at < 2500) {
+            if (code === this.last.code && now - this.last.at < 1500) {
                 return;
             }
 
@@ -181,6 +189,7 @@ export default function cameraScanner() {
             if (! keepOpen) {
                 this.open = false;
                 this.error = '';
+                cameraState.open = false;
             }
         },
 

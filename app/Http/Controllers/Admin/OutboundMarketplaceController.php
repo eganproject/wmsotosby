@@ -116,6 +116,21 @@ class OutboundMarketplaceController extends Controller implements HasMiddleware
             ]);
         }
 
+        // Paket yang scannya sudah tuntas tidak boleh dibuka ulang.
+        //
+        // Dokumennya masih berstatus draft karena menunggu diproses di
+        // antrean, dan tanpa penjagaan ini scan resi kedua akan menghapus
+        // seluruh baris barangnya lalu membuatnya dari nol — hasil QC yang
+        // sudah selesai hilang tanpa pemberitahuan. Kejadian ini gampang
+        // terjadi tanpa disengaja: setelah paket ditutup layar kembali
+        // menunggu resi, sementara label yang sama masih di depan kamera.
+        if ($existing && $existing->isResiVerified() && $existing->items->isNotEmpty()
+            && $existing->items->every(fn (OutboundItem $item) => $item->isFullyScanned())) {
+            throw ValidationException::withMessages([
+                'code' => "Resi ini sudah selesai discan pada {$existing->code} dan menunggu diproses di antrean Siap Dikirim.",
+            ]);
+        }
+
         // Baris barang selalu diambil ulang dari data import agar sesuai pesanan.
         $lines = $this->resolver->toOutboundLines($order);
 

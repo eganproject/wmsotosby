@@ -11,6 +11,7 @@
  * kolom input dan tahapannya berganti sendiri, jadi tidak ada klik antar paket.
  */
 import { announce as signal, timestamp } from './feedback';
+import { cameraState } from './scan-state';
 
 export default function packingStation(config) {
     return {
@@ -232,6 +233,10 @@ export default function packingStation(config) {
         },
 
         focusInput() {
+            // Saat memindai lewat kamera, memfokuskan kolom teks akan
+            // memunculkan papan ketik yang menutupi tampilan kamera.
+            if (cameraState.open) return;
+
             this.$nextTick(() => this.$refs.input?.focus());
         },
     };

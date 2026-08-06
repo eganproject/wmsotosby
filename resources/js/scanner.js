@@ -9,6 +9,7 @@
  * seperti keyboard lalu menekan Enter) bisa dipakai beruntun tanpa mouse.
  */
 import { announce as signal, timestamp } from './feedback';
+import { cameraState } from './scan-state';
 
 export default function documentScanner(config) {
     return {
@@ -88,6 +89,10 @@ export default function documentScanner(config) {
         },
 
         focusInput() {
+            // Saat memindai lewat kamera, memfokuskan kolom teks akan
+            // memunculkan papan ketik yang menutupi tampilan kamera.
+            if (cameraState.open) return;
+
             this.$nextTick(() => this.$refs.input?.focus());
         },
     };
