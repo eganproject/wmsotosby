@@ -66,8 +66,12 @@
 
                     {{-- Input scan --}}
                     <div class="p-6 sm:p-10 sm:pt-7">
-                        <div class="flex items-start gap-2" x-show="! progress.ready">
-                            @include('admin.partials.camera-scan')
+                        <div class="flex items-stretch gap-2" x-show="! progress.ready">
+                            @include('admin.partials.camera-scan', [
+                                'scanHint' => "isResiStage
+                                    ? 'Langkah 1: pindai label resi pada paket.'
+                                    : `\${progress.scanned}/\${progress.total} unit terpindai.`",
+                            ])
 
                         <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
                             <div class="relative">

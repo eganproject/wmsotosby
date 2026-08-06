@@ -80,8 +80,12 @@
                         </div>
 
                         {{-- Kolom input: posisinya tidak pernah berubah --}}
-                        <div class="flex items-start gap-2 px-6 pt-4">
-                            @include('admin.partials.camera-scan')
+                        <div class="flex items-stretch gap-2 px-6 pt-4">
+                            @include('admin.partials.camera-scan', [
+                                'scanHint' => "document
+                                    ? `\${items.length} baris · \${totalUnits} unit tercatat pada paket ini.`
+                                    : 'Langkah 1: pindai label resi paket retur.'",
+                            ])
 
                             <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
                                 <div class="relative">

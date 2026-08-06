@@ -76,8 +76,14 @@
                             <p class="mt-1 h-8 overflow-hidden text-xs leading-4 text-white/60" x-text="hint"></p>
                         </div>
 
-                        <div class="flex items-start gap-2 px-6 pt-4">
-                            @include('admin.partials.camera-scan')
+                        <div class="flex items-stretch gap-2 px-6 pt-4">
+                            @include('admin.partials.camera-scan', [
+                                'scanHint' => "progress
+                                    ? (progress.ready
+                                        ? 'Semua barang terpindai. Paket masuk antrean siap kirim.'
+                                        : `Sisa \${remaining} unit lagi pada paket ini.`)
+                                    : 'Langkah 1: pindai label resi pada paket.'",
+                            ])
 
                             <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
                                 <div class="relative">

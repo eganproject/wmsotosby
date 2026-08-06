@@ -71,6 +71,23 @@ class CameraScanTest extends TestCase
     }
 
     /**
+     * Kamera menutupi seluruh layar, jadi umpan balik stasiun harus ikut
+     * tampil di dalamnya. Tanpa itu operator memindai tanpa tahu apakah
+     * bacaannya diterima — persis kebingungan yang dilaporkan dari lapangan.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('scanPages')]
+    public function test_the_camera_overlay_reports_what_the_station_says(string $route): void
+    {
+        $this->actingAs($this->admin)->get(route($route))
+            ->assertOk()
+            // Pesan hasil scan dari komponen stasiun.
+            ->assertSee('feedback.message', false)
+            // Petunjuk langkah berikutnya, khusus per halaman.
+            ->assertSee('Langkah 1: pindai label resi', false)
+            ->assertSee('Arahkan kamera ke kode. Hasilnya muncul di sini.');
+    }
+
+    /**
      * Kamera hanya jalan di halaman aman. Pesannya harus menyebut sebabnya,
      * bukan sekadar gagal, karena di HTTP peramban menolak diam-diam.
      */
