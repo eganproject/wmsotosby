@@ -182,6 +182,162 @@ class OutboundDispatchTest extends TestCase
             ->assertSee('<input type="hidden" name="marketplace" value="Shopee">', false);
     }
 
+    /* --------------------------------------------------- scan resi ------- */
+
+    public function test_scanning_a_waybill_ships_the_package(): void
+    {
+        $outbound = $this->makePackage('SPXID111', 3, scanned: 3);
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID111'])
+            ->assertOk()
+            ->assertJsonPath('outbound.id', $outbound->id)
+            ->assertJsonPath('outbound.units', 3)
+            ->assertJsonPath('shipped', true)
+            ->assertJsonPath('message', 'Dikirim · 3 unit')
+            ->assertJsonPath('remaining', 0);
+
+        $this->assertTrue($outbound->refresh()->isPosted());
+        $this->assertSame(47, $this->product->refresh()->stock);
+    }
+
+    /**
+     * Scanner sering menyisipkan spasi dan mengubah besar kecil huruf. Resi
+     * yang sama tidak boleh dianggap resi lain karenanya.
+     */
+    public function test_a_waybill_is_found_despite_spacing_and_case(): void
+    {
+        $outbound = $this->makePackage('SPXID111', 1, scanned: 1);
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => '  spx id111 '])
+            ->assertOk();
+
+        $this->assertTrue($outbound->refresh()->isPosted());
+    }
+
+    /** Label resi bisa rusak; nomor dokumen tercetak tetap bisa dipakai. */
+    public function test_the_document_number_can_be_scanned_instead(): void
+    {
+        $outbound = $this->makePackage('SPXID111', 1, scanned: 1);
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => $outbound->code])
+            ->assertOk();
+
+        $this->assertTrue($outbound->refresh()->isPosted());
+    }
+
+    /**
+     * Resi yang sama discan dua kali tidak boleh mengirim dua kali — dan
+     * penolakannya harus menyebutkan sebabnya, bukan sekadar gagal.
+     */
+    public function test_scanning_the_same_waybill_twice_is_refused(): void
+    {
+        $outbound = $this->makePackage('SPXID111', 2, scanned: 2);
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID111'])
+            ->assertOk();
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID111'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.code.0', "Sudah dikirim · {$outbound->code}");
+
+        // Sekali dikirim, sekali pula stok berkurang.
+        $this->assertSame(48, $this->product->refresh()->stock);
+    }
+
+    public function test_a_package_that_is_still_being_scanned_is_refused(): void
+    {
+        $halfway = $this->makePackage('SPXID222', 5, scanned: 2);
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID222'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.code.0', 'Belum selesai QC · sisa 3 unit');
+
+        $this->assertTrue($halfway->refresh()->isDraft());
+        $this->assertSame(50, $this->product->refresh()->stock);
+    }
+
+    public function test_an_unknown_waybill_is_refused(): void
+    {
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'TIDAKADA123'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.code.0', 'Resi tidak dikenali · belum discan di packing');
+    }
+
+    public function test_a_package_awaiting_approval_is_refused(): void
+    {
+        $outbound = $this->makePackage('SPXID111', 2, scanned: 2);
+
+        $staff = User::factory()->create(['role_id' => Role::where('slug', 'staff-gudang')->value('id')]);
+
+        // Petugas tanpa hak menyetujui hanya mengajukan.
+        $this->actingAs($staff)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID111'])
+            ->assertOk()
+            ->assertJsonPath('shipped', false)
+            ->assertJsonPath('message', 'Diajukan · menunggu persetujuan');
+
+        $this->assertTrue($outbound->refresh()->isPending());
+        $this->assertSame(50, $this->product->refresh()->stock);
+
+        // Discan lagi, dokumennya sedang menunggu keputusan.
+        $this->actingAs($staff)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID111'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.code.0', "Menunggu persetujuan · {$outbound->code}");
+    }
+
+    /**
+     * Stok bisa saja sudah diambil paket lain sejak antrean disusun. Yang
+     * penting: dokumennya tidak berubah status dan pesannya menyebut barangnya.
+     */
+    public function test_a_package_without_enough_stock_is_refused(): void
+    {
+        $outbound = $this->makePackage('SPXID111', 5, scanned: 5);
+
+        $this->product->forceFill(['stock' => 2])->save();
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID111'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.code.0', 'Stok Filter Oli Standar tidak mencukupi: butuh 5, tersedia 2 pcs.');
+
+        $this->assertTrue($outbound->refresh()->isDraft());
+        $this->assertSame(2, $this->product->refresh()->stock);
+    }
+
+    public function test_scanning_requires_the_posting_permission(): void
+    {
+        $this->makePackage('SPXID111', 1, scanned: 1);
+
+        $role = \App\Models\Role::create(['name' => 'Pengamat Gudang', 'slug' => 'pengamat-gudang']);
+        $role->permissions()->sync(
+            \App\Models\Permission::whereIn('slug', ['dashboard.view', 'outbounds.view'])->pluck('id'),
+        );
+
+        $viewer = User::factory()->create(['role_id' => $role->id]);
+
+        $this->actingAs($viewer)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID111'])
+            ->assertForbidden();
+    }
+
+    public function test_the_queue_offers_the_scan_panel(): void
+    {
+        $this->makePackage('SPXID111', 1, scanned: 1);
+
+        $this->actingAs($this->admin)->get(route('admin.outbounds.ready'))
+            ->assertOk()
+            ->assertSee('Scan resi untuk mengirim')
+            ->assertSee(route('admin.outbounds.ready.scan'));
+    }
+
     public function test_processing_requires_the_posting_permission(): void
     {
         $outbound = $this->makePackage('SPXID111', 1, scanned: 1);

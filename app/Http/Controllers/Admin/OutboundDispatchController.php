@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Outbound;
 use App\Services\ApprovalService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -29,7 +30,7 @@ class OutboundDispatchController extends Controller implements HasMiddleware
     {
         return [
             new Middleware('can:outbounds.view', only: ['index']),
-            new Middleware('can:outbounds.post', only: ['process']),
+            new Middleware('can:outbounds.post', only: ['process', 'scan']),
         ];
     }
 
@@ -49,6 +50,9 @@ class OutboundDispatchController extends Controller implements HasMiddleware
         return view('admin.outbounds.ready', [
             'outbounds' => $outbounds,
             'marketplaces' => Outbound::marketplaces(),
+            // Sengaja tanpa filter: memindai resi bekerja atas seluruh antrean,
+            // bukan hanya atas yang kebetulan tampil di layar.
+            'readyCount' => Outbound::readyToShip()->count(),
         ]);
     }
 
@@ -95,6 +99,90 @@ class OutboundDispatchController extends Controller implements HasMiddleware
             ->with('error', $failed
                 ? count($failed).' paket gagal diproses. '.implode(' | ', $failed)
                 : null);
+    }
+
+    /**
+     * Kirim satu paket dengan memindai resinya.
+     *
+     * Dipakai di titik serah ke kurir: paket diangkat, resinya discan, dan
+     * layar langsung siap untuk paket berikutnya. Mencentang daftar tetap ada
+     * untuk memproses borongan, tetapi memindai punya keunggulan yang tidak
+     * bisa ditiru centang — yang tercatat terkirim adalah paket yang benar-
+     * benar ada di tangan, bukan baris yang kebetulan tercentang di layar.
+     */
+    public function scan(Request $request): JsonResponse
+    {
+        $code = trim($request->validate([
+            'code' => ['required', 'string', 'max:191'],
+        ])['code']);
+
+        $outbound = Outbound::findByScannedCode($code);
+
+        if (! $outbound) {
+            throw ValidationException::withMessages([
+                'code' => 'Resi tidak dikenali · belum discan di packing',
+            ]);
+        }
+
+        $outbound->load('items.product');
+
+        $this->guardDispatchable($outbound);
+
+        $selfApprove = $request->user()->can('outbounds.approve');
+        $units = (int) $outbound->items->sum('quantity');
+
+        try {
+            $selfApprove
+                ? $this->approvals->submitAndApprove($outbound)
+                : $this->approvals->submit($outbound);
+        } catch (ValidationException $exception) {
+            // Stok bisa saja sudah diambil paket lain sejak antrean disusun.
+            throw ValidationException::withMessages([
+                'code' => collect($exception->errors())->flatten()->implode(' '),
+            ]);
+        }
+
+        return response()->json([
+            'outbound' => [
+                'id' => $outbound->id,
+                'code' => $outbound->code,
+                'tracking_number' => $outbound->tracking_number,
+                'marketplace' => $outbound->marketplace,
+                'recipient' => $outbound->recipient,
+                'units' => $units,
+            ],
+            'shipped' => $selfApprove,
+            'message' => $selfApprove
+                ? "Dikirim · {$units} unit"
+                : 'Diajukan · menunggu persetujuan',
+            'remaining' => Outbound::readyToShip()->count(),
+        ]);
+    }
+
+    /**
+     * Tolak paket yang belum boleh dikirim, dengan alasan yang menyebutkan
+     * tindakan berikutnya — bukan sekadar "tidak bisa".
+     *
+     * Nomor dokumen hanya disebut saat memang membantu mengenali paketnya.
+     * Pada paket yang QC-nya belum selesai, operator memegang barangnya dan
+     * yang perlu ia tahu adalah berapa unit yang kurang.
+     */
+    protected function guardDispatchable(Outbound $outbound): void
+    {
+        $reason = match (true) {
+            $outbound->isPosted() => "Sudah dikirim · {$outbound->code}",
+            $outbound->isPending() => "Menunggu persetujuan · {$outbound->code}",
+            $outbound->isRejected() => "Ditolak penyetuju · {$outbound->code}",
+            ! $outbound->isMarketplace() => "Bukan paket marketplace · proses dari dokumen {$outbound->code}",
+            ! $outbound->isResiVerified() => 'Belum discan di packing',
+            ! $outbound->isFullyScanned() => 'Belum selesai QC · sisa '
+                .($outbound->totalQuantity() - $outbound->totalScanned()).' unit',
+            default => null,
+        };
+
+        if ($reason !== null) {
+            throw ValidationException::withMessages(['code' => $reason]);
+        }
     }
 
     /**

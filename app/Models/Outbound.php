@@ -173,6 +173,45 @@ class Outbound extends Model
                 ->orWhereHas('items', fn (Builder $items) => $items->whereColumn('scanned_quantity', '<', 'quantity')));
     }
 
+    /**
+     * Cari dokumen dari kode yang discan: nomor resi dulu, lalu nomor dokumen.
+     *
+     * Sama seperti pencarian barang, spasi dan besar kecil huruf diabaikan
+     * karena scanner sering menyisipkannya. Kode dokumen ikut dicoba supaya
+     * paket yang labelnya rusak masih bisa diproses dari nomor cetakannya.
+     */
+    public static function findByScannedCode(?string $code): ?self
+    {
+        $trimmed = trim((string) $code);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        // Jalur cepat: kode apa adanya masih memakai indeks. Inilah yang
+        // terjadi pada hampir semua scan.
+        $exact = static::query()
+            ->where(fn (Builder $query) => $query
+                ->where('tracking_number', $trimmed)
+                ->orWhere('code', $trimmed))
+            ->latest('id')
+            ->first();
+
+        if ($exact) {
+            return $exact;
+        }
+
+        // Jalur lambat, hanya ditempuh bila kode mengandung spasi atau beda
+        // besar kecil huruf; perbandingan ini tidak bisa memakai indeks.
+        $needle = strtoupper(preg_replace('/\s+/', '', $trimmed));
+
+        return static::query()
+            ->whereRaw("UPPER(REPLACE(COALESCE(tracking_number, ''), ' ', '')) = ?", [$needle])
+            ->orWhereRaw("UPPER(REPLACE(code, ' ', '')) = ?", [$needle])
+            ->latest('id')
+            ->first();
+    }
+
     public function scopeSearch(Builder $query, ?string $term): Builder
     {
         return $query->when($term, function (Builder $query, string $term) {

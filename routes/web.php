@@ -56,6 +56,7 @@ Route::middleware('auth')
         Route::post('outbounds/marketplace', [OutboundMarketplaceController::class, 'store'])->name('outbounds.marketplace.store');
         Route::get('outbounds/ready', [OutboundDispatchController::class, 'index'])->name('outbounds.ready');
         Route::post('outbounds/ready', [OutboundDispatchController::class, 'process'])->name('outbounds.ready.process');
+        Route::post('outbounds/ready/scan', [OutboundDispatchController::class, 'scan'])->name('outbounds.ready.scan');
         Route::get('outbounds/{outbound}/scan', [OutboundScanController::class, 'show'])->name('outbounds.scan');
         Route::post('outbounds/{outbound}/scan/resi', [OutboundScanController::class, 'resi'])->name('outbounds.scan.resi');
         Route::post('outbounds/{outbound}/scan/item', [OutboundScanController::class, 'item'])->name('outbounds.scan.item');
