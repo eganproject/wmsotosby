@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Outbound;
 use App\Models\Product;
+use App\Models\ReturnReceipt;
 use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,6 +31,12 @@ class CameraScanTest extends TestCase
         $this->admin = User::where('email', 'admin@wmsotosby.test')->firstOrFail();
     }
 
+    /** Awal jalur SVG ikon kamera — lihat components/icon.blade.php. */
+    protected const CAMERA_ICON = 'M6.827 6.175';
+
+    /** Awal jalur SVG ikon kaca pembesar, yang dulu dipakai tombol ini. */
+    protected const SEARCH_ICON = 'm21 21-5.197-5.197';
+
     public static function scanPages(): array
     {
         return [
@@ -51,23 +58,69 @@ class CameraScanTest extends TestCase
 
     public function test_the_saved_document_scan_page_offers_the_camera_too(): void
     {
-        $product = Product::create([
-            'sku' => 'FLT-1', 'barcode' => '8991234500035',
-            'name' => 'Filter', 'unit' => 'pcs', 'min_stock' => 0,
-        ]);
-
-        $outbound = Outbound::create([
-            'code' => Outbound::nextCode(), 'date' => now(),
-            'type' => Outbound::TYPE_MARKETPLACE, 'recipient' => 'Pembeli',
-            'marketplace' => 'Shopee', 'tracking_number' => 'SPXID1',
-            'status' => Outbound::STATUS_DRAFT,
-        ]);
-        $outbound->items()->create(['product_id' => $product->id, 'quantity' => 1]);
+        $outbound = $this->makeOutbound();
 
         $this->actingAs($this->admin)->get(route('admin.outbounds.scan', $outbound))
             ->assertOk()
             ->assertSee('cameraScanner()', false)
             ->assertSee('camera-scan.window', false);
+    }
+
+    /**
+     * Antrean siap kirim ikut memindai resi untuk mengirim paket, jadi ia
+     * butuh tombol yang sama seperti stasiun lainnya.
+     */
+    public function test_the_dispatch_queue_offers_the_camera(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.outbounds.ready'))
+            ->assertOk()
+            ->assertSee('cameraScanner()', false)
+            ->assertSee('Pindai dengan kamera')
+            ->assertSee('camera-scan.window', false);
+    }
+
+    /**
+     * Halaman ini sempat punya kolom scan tanpa tombol kamera sama sekali,
+     * padahal retur justru sering diterima sambil memegang ponsel.
+     */
+    public function test_the_return_scan_page_offers_the_camera(): void
+    {
+        $return = $this->makeReturn();
+
+        $this->actingAs($this->admin)->get(route('admin.returns.scan', $return))
+            ->assertOk()
+            ->assertSee('cameraScanner()', false)
+            ->assertSee('Pindai dengan kamera')
+            ->assertSee('camera-scan.window', false);
+    }
+
+    /**
+     * Tombolnya memakai ikon kamera, bukan kaca pembesar.
+     *
+     * Kaca pembesar sudah dipakai kolom kode di sebelahnya untuk arti yang
+     * berbeda — "cari kode ini" — sehingga dua tombol bersebelahan terlihat
+     * mengerjakan hal yang sama.
+     */
+    public function test_the_camera_button_wears_a_camera_icon(): void
+    {
+        $partial = file_get_contents(resource_path('views/admin/partials/camera-scan.blade.php'));
+
+        $this->assertStringNotContainsString('name="search"', $partial);
+
+        $this->actingAs($this->admin)->get(route('admin.outbounds.marketplace'))
+            ->assertOk()
+            ->assertSee(self::CAMERA_ICON, false);
+    }
+
+    /**
+     * Kolom kode tetap memakai kaca pembesar: keduanya berdampingan justru
+     * supaya bedanya terbaca sekilas.
+     */
+    public function test_the_code_field_keeps_its_magnifier(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.outbounds.marketplace'))
+            ->assertOk()
+            ->assertSee(self::SEARCH_ICON, false);
     }
 
     /**
@@ -114,5 +167,46 @@ class CameraScanTest extends TestCase
         $this->assertStringContainsString("'BarcodeDetector' in window", $script);
         // Berkas wasm disajikan dari domain sendiri, bukan CDN.
         $this->assertStringContainsString('setZXingModuleOverrides', $script);
+    }
+
+    /* --------------------------------------------------- helpers --------- */
+
+    protected function makeOutbound(): Outbound
+    {
+        $outbound = Outbound::create([
+            'code' => Outbound::nextCode(), 'date' => now(),
+            'type' => Outbound::TYPE_MARKETPLACE, 'recipient' => 'Pembeli',
+            'marketplace' => 'Shopee', 'tracking_number' => 'SPXID1',
+            'status' => Outbound::STATUS_DRAFT,
+        ]);
+
+        $outbound->items()->create(['product_id' => $this->makeProduct()->id, 'quantity' => 1]);
+
+        return $outbound;
+    }
+
+    protected function makeReturn(): ReturnReceipt
+    {
+        $return = ReturnReceipt::create([
+            'code' => ReturnReceipt::nextCode(), 'date' => now(),
+            'type' => ReturnReceipt::TYPE_MARKETPLACE, 'sender' => 'Pembeli',
+            'marketplace' => 'Shopee', 'tracking_number' => 'SPXID9',
+            'status' => ReturnReceipt::STATUS_DRAFT,
+        ]);
+
+        $return->items()->create([
+            'product_id' => $this->makeProduct('FLT-2', '8991234500042')->id,
+            'quantity' => 1, 'good_quantity' => 1, 'damaged_quantity' => 0,
+        ]);
+
+        return $return;
+    }
+
+    protected function makeProduct(string $sku = 'FLT-1', string $barcode = '8991234500035'): Product
+    {
+        return Product::create([
+            'sku' => $sku, 'barcode' => $barcode,
+            'name' => 'Filter', 'unit' => 'pcs', 'min_stock' => 0,
+        ]);
     }
 }

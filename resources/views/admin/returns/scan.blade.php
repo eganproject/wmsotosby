@@ -15,6 +15,8 @@
             urls: { resi: '{{ route('admin.returns.scan.resi', $return) }}' },
             progress: {{ Js::from($progress) }},
          })"
+         {{-- Hasil pindaian kamera diperlakukan sama persis dengan scanner genggam. --}}
+         x-on:camera-scan.window="code = $event.detail.code; submit()"
          class="grid grid-cols-1 gap-6 lg:grid-cols-5">
 
         {{-- Panel scan --}}
@@ -49,25 +51,49 @@
                 </div>
 
                 <div class="p-5 sm:p-6">
-                    <form data-no-ajax @submit.prevent="submit()">
-                        <div class="relative">
-                            <span class="pointer-events-none absolute inset-y-0 left-0 flex w-14 items-center justify-center text-ink-300">
-                                <x-icon name="search" class="h-6 w-6" />
-                            </span>
+                    {{--
+                        Baris scan: tombol kamera dan kolom kode berdampingan.
+                        Umpan balik di bawahnya sengaja berada di luar baris ini
+                        — sebagai sesama anak flex ia akan berdiri menyamping
+                        alih-alih di bawah kolomnya.
+                    --}}
+                    <div class="flex items-stretch gap-2">
+                        {{--
+                            Tombol kamera sempat tidak ada di halaman ini, padahal
+                            retur justru sering diterima sambil berdiri di depan
+                            tumpukan paket dengan ponsel di tangan. Disembunyikan
+                            setelah resi terverifikasi: kolomnya pun sudah mati,
+                            dan kamera yang terbuka tanpa bisa memproses apa pun
+                            lebih membingungkan daripada tidak ada tombolnya.
+                        --}}
+                        <template x-if="! isDone">
+                            @include('admin.partials.camera-scan', [
+                                'scanTitle' => "'Scan resi retur'",
+                                'scanHint' => "'Arahkan ke label pada paket retur.'",
+                                'cameraButtonClass' => 'bg-ink-950 text-white hover:bg-ink-800',
+                            ])
+                        </template>
 
-                            <input x-ref="input" x-model="code" type="text" autocomplete="off" autocapitalize="off"
-                                   spellcheck="false" :disabled="busy || isDone"
-                                   placeholder="Scan atau ketik nomor resi retur…"
-                                   class="block h-16 w-full rounded-2xl border-ink-200 bg-white pl-14 pr-28 font-mono text-lg tracking-wide text-ink-950 placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-ink-300 shadow-soft transition focus:border-ink-950 focus:ring-1 focus:ring-ink-950 disabled:bg-ink-50">
+                        <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
+                            <div class="relative">
+                                <span class="pointer-events-none absolute inset-y-0 left-0 flex w-14 items-center justify-center text-ink-300">
+                                    <x-icon name="search" class="h-6 w-6" />
+                                </span>
 
-                            <div class="absolute inset-y-0 right-0 flex items-center pr-2">
-                                <x-ui.button type="submit" size="md" x-bind:disabled="busy || isDone || ! code.trim()">
-                                    <span x-show="! busy">Proses</span>
-                                    <span x-show="busy" x-cloak>…</span>
-                                </x-ui.button>
+                                <input x-ref="input" x-model="code" type="text" autocomplete="off" autocapitalize="off"
+                                       spellcheck="false" :disabled="busy || isDone"
+                                       placeholder="Scan atau ketik nomor resi retur…"
+                                       class="block h-16 w-full rounded-2xl border-ink-200 bg-white pl-14 pr-28 font-mono text-lg tracking-wide text-ink-950 placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-ink-300 shadow-soft transition focus:border-ink-950 focus:ring-1 focus:ring-ink-950 disabled:bg-ink-50">
+
+                                <div class="absolute inset-y-0 right-0 flex items-center pr-2">
+                                    <x-ui.button type="submit" size="md" x-bind:disabled="busy || isDone || ! code.trim()">
+                                        <span x-show="! busy">Proses</span>
+                                        <span x-show="busy" x-cloak>…</span>
+                                    </x-ui.button>
+                                </div>
                             </div>
-                        </div>
-                    </form>
+                        </form>
+                    </div>
 
                     {{-- Umpan balik scan terakhir --}}
                     <template x-if="feedback">

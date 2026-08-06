@@ -13,12 +13,22 @@
         Tingginya mengikuti baris tempat tombol ini berada (self-stretch),
         supaya sejajar dengan kolom input di halaman mana pun — kolomnya
         setinggi 14 di stasiun dan 20 di halaman scan dokumen.
+
+        Warnanya bisa ditimpa lewat $cameraButtonClass: sebagian panel scan
+        berlatar gelap, sebagian berlatar putih, dan tombol yang sama di
+        keduanya membuat salah satunya tidak terbaca.
     --}}
     <button type="button" x-on:click="start()"
             title="Pindai dengan kamera"
-            class="inline-flex shrink-0 items-center justify-center gap-2 self-stretch rounded-2xl bg-white/10 px-3.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/15 transition hover:bg-white/20 sm:px-4 lg:hidden">
-        {{-- Di layar tersempit hanya ikon, supaya kolom kode tetap lapang. --}}
-        <x-icon name="search" class="h-5 w-5 shrink-0" />
+            class="inline-flex shrink-0 items-center justify-center gap-2 self-stretch rounded-2xl px-3.5 text-sm font-semibold transition sm:px-4 lg:hidden
+                   {{ $cameraButtonClass ?? 'bg-white/10 text-white ring-1 ring-inset ring-white/15 hover:bg-white/20' }}">
+        {{--
+            Ikon kamera, bukan kaca pembesar. Kaca pembesar sudah dipakai
+            kolom di sebelahnya untuk arti yang berbeda — "cari kode ini" —
+            sehingga dua tombol bersebelahan terlihat mengerjakan hal sama.
+            Di layar tersempit hanya ikonnya, supaya kolom kode tetap lapang.
+        --}}
+        <x-icon name="camera" class="h-5 w-5 shrink-0" />
         <span class="hidden sm:inline">Kamera</span>
         <span class="sr-only">Pindai dengan kamera</span>
     </button>
@@ -149,7 +159,7 @@
                         <x-icon name="x-circle" class="mt-0.5 h-6 w-6 shrink-0 text-white" />
                     </template>
                     <template x-if="! feedback">
-                        <x-icon name="search" class="mt-0.5 h-6 w-6 shrink-0 text-white/30" />
+                        <x-icon name="camera" class="mt-0.5 h-6 w-6 shrink-0 text-white/30" />
                     </template>
 
                     {{--
