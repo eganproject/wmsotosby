@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\ShipmentImportController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockMovementController;
 use App\Http\Controllers\Admin\StockOpnameController;
+use App\Http\Controllers\Admin\StockReportController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\WaybillStatusController;
 use App\Http\Controllers\Admin\UserController;
@@ -42,6 +43,9 @@ Route::middleware('auth')
 
         Route::get('movements/export', [StockMovementController::class, 'export'])->name('movements.export');
         Route::get('movements', [StockMovementController::class, 'index'])->name('movements.index');
+
+        Route::get('reports/stock/export', [StockReportController::class, 'export'])->name('reports.stock.export');
+        Route::get('reports/stock', [StockReportController::class, 'index'])->name('reports.stock');
 
         Route::post('inbounds/{inbound}/submit', [InboundController::class, 'submit'])->name('inbounds.submit');
         Route::post('inbounds/{inbound}/approve', [InboundController::class, 'approve'])->name('inbounds.approve');

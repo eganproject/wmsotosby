@@ -30,6 +30,10 @@ class RolePermissionSeeder extends Seeder
             'movements.view' => 'Melihat mutasi stok',
             'movements.export' => 'Export mutasi stok ke Excel',
         ],
+        'Laporan' => [
+            'reports.view' => 'Melihat laporan stok & perputaran barang',
+            'reports.export' => 'Export laporan stok ke Excel',
+        ],
         'Barang Rusak' => [
             'disposals.view' => 'Melihat stok & penanganan barang rusak',
             'disposals.create' => 'Membuat penanganan barang rusak',
@@ -161,6 +165,7 @@ class RolePermissionSeeder extends Seeder
                 // mendaftarkannya; menunggu admin berarti paket berhenti.
                 'products.view', 'products.create', 'products.update',
                 'movements.view', 'movements.export',
+                'reports.view', 'reports.export',
                 'inbounds.view', 'inbounds.create', 'inbounds.update', 'inbounds.post',
                 'outbounds.view', 'outbounds.create', 'outbounds.update', 'outbounds.scan', 'outbounds.post',
                 'returns.view', 'returns.create', 'returns.update', 'returns.scan', 'returns.post',

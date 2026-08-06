@@ -164,3 +164,28 @@ Bila suatu saat ada yang aneh setelah pembaruan, bersihkan dulu:
 ```bash
 php artisan optimize:clear
 ```
+
+## 8. Pembaruan yang menambah izin baru
+
+Sebagian pembaruan memperkenalkan izin baru — misalnya `reports.view` untuk
+Laporan Stok. Izin itu tersimpan sebagai baris di basis data, bukan di kode,
+jadi ia belum ada di server sampai seedernya dijalankan lagi:
+
+```bash
+php artisan db:seed --class=RolePermissionSeeder
+```
+
+Perintah itu aman diulang: izin yang sudah ada diperbarui, tidak digandakan.
+Tetapi ada dua akibat sampingan yang perlu diketahui lebih dulu:
+
+- **Izin ketiga role bawaan disetel ulang** ke daftar di dalam seeder. Bila
+  Anda pernah menyesuaikan izin Admin atau Staff Gudang lewat halaman
+  *Hak Akses*, penyesuaian itu kembali seperti semula. Role yang Anda buat
+  sendiri tidak tersentuh.
+- **Sandi akun `admin@wmsotosby.test` kembali menjadi `password`.** Bila akun
+  itu masih dipakai, ganti sandinya lagi setelah seeder selesai.
+
+Pemegang role Super Admin tidak perlu menunggu seeder — role itu melewati
+seluruh pemeriksaan izin, jadi halaman barunya langsung terbuka. Yang
+membutuhkannya adalah role lain, dan setelah seeder dijalankan izinnya bisa
+diatur seperti biasa lewat *Pengaturan → Pengguna & Akses → Hak Akses*.

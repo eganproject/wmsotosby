@@ -32,6 +32,8 @@ class SectionTabs
                     'match' => 'admin.products.*', 'can' => 'products.view'],
                 ['label' => 'Mutasi Stok', 'icon' => 'chart', 'route' => 'admin.movements.index',
                     'match' => 'admin.movements.*', 'can' => 'movements.view'],
+                ['label' => 'Laporan Stok', 'icon' => 'trending-up', 'route' => 'admin.reports.stock',
+                    'match' => 'admin.reports.*', 'can' => 'reports.view'],
                 ['label' => 'Barang Rusak', 'icon' => 'trash', 'route' => 'admin.disposals.index',
                     'match' => 'admin.disposals.*', 'can' => 'disposals.view'],
                 ['label' => 'Pemasok', 'icon' => 'users', 'route' => 'admin.suppliers.index',

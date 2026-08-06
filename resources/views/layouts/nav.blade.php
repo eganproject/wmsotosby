@@ -30,7 +30,7 @@
         @endcan
     </div>
 
-    @canany(['products.view', 'movements.view', 'suppliers.view', 'inbounds.view', 'outbounds.view', 'returns.view', 'adjustments.view', 'opnames.view', 'disposals.view', 'imports.view'])
+    @canany(['products.view', 'movements.view', 'reports.view', 'suppliers.view', 'inbounds.view', 'outbounds.view', 'returns.view', 'adjustments.view', 'opnames.view', 'disposals.view', 'imports.view'])
         <div class="space-y-1">
             <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Gudang</p>
 
