@@ -87,7 +87,7 @@ class CameraScanTest extends TestCase
             ->assertSee('Langkah ${', false)
             ->assertSee('Scan label resi', false)
             ->assertSee('Arahkan ke label resi', false)
-            ->assertSee('Arahkan kamera ke kode. Hasilnya muncul di sini.');
+            ->assertSee('Arahkan kamera ke kode');
     }
 
     /**

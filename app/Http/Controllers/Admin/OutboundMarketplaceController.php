@@ -127,7 +127,7 @@ class OutboundMarketplaceController extends Controller implements HasMiddleware
         if ($existing && $existing->isResiVerified() && $existing->items->isNotEmpty()
             && $existing->items->every(fn (OutboundItem $item) => $item->isFullyScanned())) {
             throw ValidationException::withMessages([
-                'code' => "Resi ini sudah selesai discan pada {$existing->code} dan menunggu diproses di antrean Siap Dikirim.",
+                'code' => "Resi sudah selesai discan · menunggu diproses ({$existing->code})",
             ]);
         }
 

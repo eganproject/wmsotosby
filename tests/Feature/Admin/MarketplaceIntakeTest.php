@@ -145,7 +145,7 @@ class MarketplaceIntakeTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath(
                 'errors.code.0',
-                'Stok Filter Oli Standar (SKU FLT-OLI-STD) kosong. Catat barang masuknya dulu sebelum barang ini bisa discan.',
+                'Stok FLT-OLI-STD kosong — catat barang masuk dulu',
             );
 
         $this->assertDatabaseCount('outbounds', 0);
@@ -161,7 +161,7 @@ class MarketplaceIntakeTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath(
                 'errors.code.0',
-                'Stok Filter Oli Standar (SKU FLT-OLI-STD) tidak mencukupi: butuh 5, tersedia 2 pcs.',
+                'Stok FLT-OLI-STD kurang · butuh 5, ada 2 pcs',
             );
 
         $this->assertDatabaseCount('outbounds', 0);
@@ -189,7 +189,7 @@ class MarketplaceIntakeTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath(
                 'errors.code.0',
-                'Stok Filter Oli Standar (SKU FLT-OLI-STD) kosong. Catat barang masuknya dulu sebelum barang ini bisa discan.',
+                'Stok FLT-OLI-STD kosong — catat barang masuk dulu',
             );
 
         $this->assertSame(0, $outbound->refresh()->totalScanned());
@@ -254,7 +254,7 @@ class MarketplaceIntakeTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath(
                 'errors.code.0',
-                'Filter Oli Standar (SKU FLT-OLI-STD) sisa 5 pcs lagi, tidak bisa menambah 9.',
+                'FLT-OLI-STD sisa 5 pcs · tidak bisa +9',
             );
 
         $this->assertSame(0, $outbound->refresh()->totalScanned());
@@ -382,7 +382,7 @@ class MarketplaceIntakeTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath(
                 'errors.code.0',
-                "Resi ini sudah selesai discan pada {$outbound->code} dan menunggu diproses di antrean Siap Dikirim.",
+                "Resi sudah selesai discan · menunggu diproses ({$outbound->code})",
             );
 
         // Hasil scannya utuh, bukan direset diam-diam.

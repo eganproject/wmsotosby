@@ -158,7 +158,9 @@ export default function packingStation(config) {
             this.urls = { ...this.urls, ...payload.urls };
             this.stage = 'item';
 
-            this.report('success', `${payload.outbound.code} — ${payload.progress.total} unit siap discan.`, code, 'resi');
+            // Nomor dokumennya sudah tampil di kartu identitas paket, jadi
+            // pesannya cukup menyebut yang belum diketahui: berapa unit.
+            this.report('success', `Paket dibuka · ${payload.progress.total} unit`, code, 'resi');
         },
 
         async scanItem(code) {
@@ -222,7 +224,7 @@ export default function packingStation(config) {
 
             this.feedback = {
                 type: 'success',
-                message: `${this.outbound.code} lengkap — ${this.progress.total} unit. Masuk antrean siap kirim.`,
+                message: `Paket lengkap · ${this.progress.total} unit`,
             };
 
             // Bunyi paket lengkap sengaja paling menonjol: itu penanda

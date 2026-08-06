@@ -163,7 +163,7 @@ class OutboundScanService
 
         if ($item->isFullyScanned()) {
             throw ValidationException::withMessages([
-                'code' => "{$item->product->name} (SKU {$item->product->sku}) sudah discan sesuai jumlah ({$item->quantity} {$item->product->unit}).",
+                'code' => "{$item->product->sku} sudah lengkap · {$item->quantity} {$item->product->unit}",
             ]);
         }
 
@@ -174,7 +174,7 @@ class OutboundScanService
 
         if ($quantity > $remaining) {
             throw ValidationException::withMessages([
-                'code' => "{$item->product->name} (SKU {$item->product->sku}) sisa {$remaining} {$item->product->unit} lagi, tidak bisa menambah {$quantity}.",
+                'code' => "{$item->product->sku} sisa {$remaining} {$item->product->unit} · tidak bisa +{$quantity}",
             ]);
         }
 
@@ -195,8 +195,11 @@ class OutboundScanService
         $item->refresh();
 
         return [
-            'message' => "{$item->product->name} — {$item->scanned_quantity}/{$item->quantity} {$item->product->unit}"
-                .($quantity > 1 ? " (+{$quantity})" : ''),
+            // SKU, bukan nama barang: nama bisa sepanjang "KABEL BINTIK 0.5MM
+            // X 100M HIJAU" dan operator memegang labelnya, bukan membaca
+            // katalog. Yang dicari hanya "yang mana" dan "berapa lagi".
+            'message' => ($quantity > 1 ? "+{$quantity} · " : '')
+                ."{$item->product->sku} · {$item->scanned_quantity}/{$item->quantity} {$item->product->unit}",
             'matched_by' => $matchedField,
             'sku' => $item->product->sku,
             'item_id' => $item->id,
@@ -232,13 +235,13 @@ class OutboundScanService
      */
     protected function shortageMessage(Product $product, int $needed): string
     {
+        // Sependek mungkin tanpa kehilangan yang bisa ditindak: barang mana,
+        // dan apa yang kurang. Operator membacanya sambil memegang paket.
         if ($product->stock < 1) {
-            return "Stok {$product->name} (SKU {$product->sku}) kosong. "
-                .'Catat barang masuknya dulu sebelum barang ini bisa discan.';
+            return "Stok {$product->sku} kosong — catat barang masuk dulu";
         }
 
-        return "Stok {$product->name} (SKU {$product->sku}) tidak mencukupi: "
-            ."butuh {$needed}, tersedia {$product->stock} {$product->unit}.";
+        return "Stok {$product->sku} kurang · butuh {$needed}, ada {$product->stock} {$product->unit}";
     }
 
     /**

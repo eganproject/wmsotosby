@@ -147,18 +147,24 @@
                         <x-icon name="search" class="mt-0.5 h-6 w-6 shrink-0 text-white/30" />
                     </template>
 
-                    <div class="min-w-0 flex-1">
-                        <p class="text-sm font-semibold leading-snug"
+                    {{--
+                        Satu baris saja saat ada hasil.
+
+                        Petunjuk arah dan kode terbaca sudah diulang oleh
+                        daftar barang di atasnya; menumpuknya di sini membuat
+                        operator harus membaca tiga baris untuk mengetahui
+                        satu hal. Petunjuk hanya muncul selagi belum ada hasil,
+                        yaitu saat kamera baru dibuka.
+                    --}}
+                    <div class="min-w-0 flex-1 self-center">
+                        <p class="text-base font-semibold leading-snug"
                            :class="feedback ? 'text-white' : 'text-white/40'"
-                           x-text="feedback ? feedback.message : 'Arahkan kamera ke kode. Hasilnya muncul di sini.'"></p>
+                           x-text="feedback ? feedback.message : 'Arahkan kamera ke kode'"></p>
 
                         @isset($scanHint)
-                            <p class="mt-1 text-xs text-white/70" x-text="{{ $scanHint }}"></p>
+                            <p class="mt-1 text-xs text-white/70" x-show="! feedback" x-cloak
+                               x-text="{{ $scanHint }}"></p>
                         @endisset
-
-                        <p class="mt-1 truncate font-mono text-[11px]"
-                           :class="feedback ? 'text-white/60' : 'text-white/25'"
-                           x-show="last.code" x-cloak x-text="last.code"></p>
                     </div>
                 </div>
 

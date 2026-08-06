@@ -148,7 +148,7 @@ class ItemScanMatchingTest extends TestCase
 
         $this->scan('KMP-REM-DPN')
             ->assertStatus(422)
-            ->assertJsonPath('errors.code.0', 'Kampas Rem Depan (SKU KMP-REM-DPN) sudah discan sesuai jumlah (1 set).');
+            ->assertJsonPath('errors.code.0', 'KMP-REM-DPN sudah lengkap · 1 set');
     }
 
     public function test_both_fields_can_be_mixed_within_one_document(): void
