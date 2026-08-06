@@ -6,6 +6,7 @@
             },
             progress: {{ Js::from($progress) }},
          })"
+         x-on:camera-scan.window="code = $event.detail.code; submit()"
          class="mx-auto max-w-5xl">
 
         {{-- Identitas pesanan: informasi, bukan form --}}
@@ -65,7 +66,10 @@
 
                     {{-- Input scan --}}
                     <div class="p-6 sm:p-10 sm:pt-7">
-                        <form data-no-ajax @submit.prevent="submit()" x-show="! progress.ready">
+                        <div class="flex items-start gap-2" x-show="! progress.ready">
+                            @include('admin.partials.camera-scan')
+
+                        <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
                             <div class="relative">
                                 <span class="pointer-events-none absolute inset-y-0 left-0 flex w-16 items-center justify-center text-white/30">
                                     <x-icon name="search" class="h-7 w-7" />
@@ -85,6 +89,7 @@
                                 </div>
                             </div>
                         </form>
+                        </div>
 
                         {{-- Umpan balik scan terakhir --}}
                         <template x-if="feedback">

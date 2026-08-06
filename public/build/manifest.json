@@ -1,13 +1,36 @@
 {
+  "node_modules/barcode-detector/dist/es/ponyfill.js": {
+    "file": "assets/ponyfill-CH0O-aif.js",
+    "name": "ponyfill",
+    "src": "node_modules/barcode-detector/dist/es/ponyfill.js",
+    "isDynamicEntry": true
+  },
+  "node_modules/zxing-wasm/dist/reader/zxing_reader.wasm": {
+    "file": "assets/zxing_reader-DHMvH2D8.wasm",
+    "src": "node_modules/zxing-wasm/dist/reader/zxing_reader.wasm"
+  },
+  "node_modules/zxing-wasm/dist/reader/zxing_reader.wasm?url": {
+    "file": "assets/zxing_reader-4uam-JMz.js",
+    "name": "zxing_reader",
+    "src": "node_modules/zxing-wasm/dist/reader/zxing_reader.wasm?url",
+    "isDynamicEntry": true,
+    "assets": [
+      "assets/zxing_reader-DHMvH2D8.wasm"
+    ]
+  },
   "resources/css/app.css": {
-    "file": "assets/app-DZzRRdc3.css",
+    "file": "assets/app-CKchfoP_.css",
     "src": "resources/css/app.css",
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-DLllMxwt.js",
+    "file": "assets/app-uWA487Hp.js",
     "name": "app",
     "src": "resources/js/app.js",
-    "isEntry": true
+    "isEntry": true,
+    "dynamicImports": [
+      "node_modules/barcode-detector/dist/es/ponyfill.js",
+      "node_modules/zxing-wasm/dist/reader/zxing_reader.wasm?url"
+    ]
   }
 }

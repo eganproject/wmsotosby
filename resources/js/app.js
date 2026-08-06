@@ -3,6 +3,7 @@ import './navigation';
 import './enhance';
 
 import Alpine from 'alpinejs';
+import cameraScanner from './camera-scanner';
 import lineItems from './line-items';
 import opnameCounter from './opname-counter';
 import packingStation from './packing-station';
@@ -13,6 +14,7 @@ import documentScanner from './scanner';
 window.Alpine = Alpine;
 
 // Didaftarkan sebelum start() agar komponen hasil swap AJAX ikut dikenali.
+Alpine.data('cameraScanner', cameraScanner);
 Alpine.data('lineItems', lineItems);
 Alpine.data('opnameCounter', opnameCounter);
 Alpine.data('packingStation', packingStation);

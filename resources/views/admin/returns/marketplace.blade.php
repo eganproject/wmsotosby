@@ -15,6 +15,7 @@
             },
             canFinish: {{ auth()->user()->can('returns.post') ? 'true' : 'false' }},
          })"
+         x-on:camera-scan.window="code = $event.detail.code; submit()"
          class="mx-auto max-w-6xl">
 
         {{-- ─────────────── Rail langkah + ringkasan sesi ─────────────── --}}
@@ -79,8 +80,10 @@
                         </div>
 
                         {{-- Kolom input: posisinya tidak pernah berubah --}}
-                        <div class="px-6 pt-4">
-                            <form data-no-ajax @submit.prevent="submit()">
+                        <div class="flex items-start gap-2 px-6 pt-4">
+                            @include('admin.partials.camera-scan')
+
+                            <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
                                 <div class="relative">
                                     <span class="pointer-events-none absolute inset-y-0 left-0 flex w-12 items-center justify-center text-white/30">
                                         <x-icon name="search" class="h-5 w-5" />

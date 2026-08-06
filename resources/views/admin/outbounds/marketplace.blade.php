@@ -10,6 +10,8 @@
             url: '{{ route('admin.outbounds.marketplace.store') }}',
             readyUrl: '{{ route('admin.outbounds.ready') }}',
          })"
+         {{-- Hasil pindaian kamera diperlakukan sama persis dengan scanner genggam. --}}
+         x-on:camera-scan.window="code = $event.detail.code; submit()"
          class="mx-auto max-w-6xl">
 
         {{-- ─────────────── Rail langkah + ringkasan sesi ─────────────── --}}
@@ -74,8 +76,10 @@
                             <p class="mt-1 h-8 overflow-hidden text-xs leading-4 text-white/60" x-text="hint"></p>
                         </div>
 
-                        <div class="px-6 pt-4">
-                            <form data-no-ajax @submit.prevent="submit()">
+                        <div class="flex items-start gap-2 px-6 pt-4">
+                            @include('admin.partials.camera-scan')
+
+                            <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
                                 <div class="relative">
                                     <span class="pointer-events-none absolute inset-y-0 left-0 flex w-12 items-center justify-center text-white/30">
                                         <x-icon name="search" class="h-5 w-5" />

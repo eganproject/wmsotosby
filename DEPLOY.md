@@ -43,8 +43,19 @@ Pastikan juga `mod_rewrite` aktif. Hostinger menyalakannya secara bawaan.
 composer install --no-dev --optimize-autoloader
 ```
 
-Bila tidak ada akses SSH, jalankan perintah itu di komputer Anda lalu
-unggah folder `vendor/` apa adanya.
+**Jangan `composer update` di server.** Keduanya terdengar mirip tetapi
+berbeda jauh:
+
+- `composer install` memasang versi yang persis tercatat di
+  `composer.lock` — sama dengan yang sudah teruji di komputer Anda.
+- `composer update` mengabaikan berkas kunci itu dan mencari versi
+  terbaru. Artinya server menjalankan kombinasi pustaka yang belum pernah
+  dilalui satu pun tes, dan pembaruan yang membawa perubahan tak sesuai
+  bisa mematikan aplikasi tanpa ada yang menyentuh kode.
+
+Perintah itu juga rakus memori dan sering gagal di shared hosting. Bila
+tidak ada akses SSH, jalankan `composer install --no-dev` di komputer Anda
+lalu unggah folder `vendor/` apa adanya.
 
 PHP yang dipakai harus **8.2 ke atas** — atur di hPanel bagian *PHP
 Configuration*. Ekstensi yang dibutuhkan: `pdo_mysql`, `mbstring`,

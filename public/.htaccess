@@ -1,3 +1,10 @@
+# Mesin pemindai kamera dimuat sebagai WebAssembly. Sebagian server Apache
+# belum mengenal akhiran .wasm dan menyajikannya sebagai berkas biasa,
+# sehingga peramban menolak menjalankannya dan kamera gagal membaca kode.
+<IfModule mod_mime.c>
+    AddType application/wasm .wasm
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
