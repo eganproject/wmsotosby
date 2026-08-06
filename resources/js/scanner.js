@@ -69,10 +69,12 @@ export default function documentScanner(config) {
                     throw new Error(payload.errors?.code?.[0] ?? payload.message ?? 'Scan gagal diproses.');
                 }
 
+                const wasResi = this.isResiStage;
+
                 this.progress = payload.progress;
-                this.announce('success', payload.message, code);
+                this.announce('success', payload.message, code, wasResi ? 'resi' : 'item');
             } catch (error) {
-                this.announce('error', error.message, code);
+                this.announce('error', error.message, code, this.isResiStage ? 'rejected' : 'error');
             } finally {
                 this.busy = false;
                 this.code = '';
@@ -80,12 +82,12 @@ export default function documentScanner(config) {
             }
         },
 
-        announce(type, message, code) {
+        announce(type, message, code, sound = null) {
             this.feedback = { type, message };
             this.history.unshift({ id: Date.now(), type, message, code, at: timestamp() });
             this.history = this.history.slice(0, 8);
 
-            signal(type);
+            signal(sound ?? (type === 'success' ? 'item' : 'error'));
         },
 
         focusInput() {

@@ -63,7 +63,7 @@ export default function opnameCounter() {
 
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-            signal('success');
+            signal('item');
             this.code = '';
 
             // Kursor pindah setelah gulirannya mulai, supaya barisnya terlihat.

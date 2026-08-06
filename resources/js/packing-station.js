@@ -138,7 +138,10 @@ export default function packingStation(config) {
             try {
                 this.isResiStage ? await this.startPackage(code) : await this.scanItem(code);
             } catch (error) {
-                this.report('error', error.message, code);
+                // Resi ditolak berbunyi lain dari barang yang salah discan:
+                // yang pertama berarti "ambil paket lain", yang kedua berarti
+                // "barang ini bukan isinya".
+                this.report('error', error.message, code, this.isResiStage ? 'rejected' : 'error');
             } finally {
                 this.busy = false;
                 this.code = '';
@@ -155,7 +158,7 @@ export default function packingStation(config) {
             this.urls = { ...this.urls, ...payload.urls };
             this.stage = 'item';
 
-            this.report('success', `${payload.outbound.code} — ${payload.progress.total} unit siap discan.`, code);
+            this.report('success', `${payload.outbound.code} — ${payload.progress.total} unit siap discan.`, code, 'resi');
         },
 
         async scanItem(code) {
@@ -165,7 +168,7 @@ export default function packingStation(config) {
 
             this.bulk = 1;
             this.progress = payload.progress;
-            this.report('success', payload.message, code);
+            this.report('success', payload.message, code, 'item');
 
             // Unit terakhir menutup paket. Tidak ada tombol, tidak ada dialog:
             // paketnya masuk antrean siap kirim dan layar lanjut sendiri.
@@ -193,11 +196,11 @@ export default function packingStation(config) {
                 });
 
                 this.progress = payload.progress;
-                this.report('success', payload.message, line.sku);
+                this.report('success', payload.message, line.sku, 'item');
 
                 if (this.progress.ready) this.completePackage();
             } catch (error) {
-                this.report('error', error.message, line.sku);
+                this.report('error', error.message, line.sku, 'error');
             } finally {
                 this.busy = false;
                 this.focusInput();
@@ -222,7 +225,9 @@ export default function packingStation(config) {
                 message: `${this.outbound.code} lengkap — ${this.progress.total} unit. Masuk antrean siap kirim.`,
             };
 
-            signal('success');
+            // Bunyi paket lengkap sengaja paling menonjol: itu penanda
+            // operator boleh beralih ke paket berikutnya.
+            signal('complete');
 
             this.autoContinue ? this.scheduleNext() : null;
         },
@@ -265,7 +270,10 @@ export default function packingStation(config) {
             return payload;
         },
 
-        report(type, message, code) {
+        /**
+         * @param {string} sound Nada yang dibunyikan — lihat feedback.js.
+         */
+        report(type, message, code, sound = null) {
             this.feedback = { type, message };
 
             if (code) {
@@ -273,7 +281,7 @@ export default function packingStation(config) {
                 this.history = this.history.slice(0, 6);
             }
 
-            signal(type);
+            signal(sound ?? (type === 'success' ? 'item' : 'error'));
         },
 
         focusInput() {

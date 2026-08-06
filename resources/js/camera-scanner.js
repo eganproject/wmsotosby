@@ -15,7 +15,7 @@
  * 2. Berkas wasm-nya disajikan dari domain sendiri, bukan CDN. Aplikasi
  *    gudang harus tetap bekerja saat jaringan luar tidak bisa dijangkau.
  */
-import { announce as signal } from './feedback';
+import { unlock as unlockAudio } from './feedback';
 import { cameraState } from './scan-state';
 
 /** Format yang dipakai marketplace: resi 1D, dan QR pada label. */
@@ -82,6 +82,12 @@ export default function cameraScanner() {
             // Papan ketik yang terlanjur terbuka menutupi tampilan kamera.
             cameraState.open = true;
             document.activeElement?.blur?.();
+
+            // Ketukan tombol ini satu-satunya sentuhan pengguna sebelum
+            // pemindaian berjalan sendiri. Peramban ponsel hanya mengizinkan
+            // audio dinyalakan dari sentuhan, jadi kuncinya dibuka di sini —
+            // tanpa ini seluruh bunyi hasil scan hilang tanpa pesan apa pun.
+            unlockAudio();
 
             try {
                 this.stream = await navigator.mediaDevices.getUserMedia({
@@ -152,8 +158,10 @@ export default function cameraScanner() {
 
             this.last = { code, at: now };
 
-            signal('success');
-            navigator.vibrate?.(60);
+            // Bunyi hasilnya dibunyikan stasiun setelah server menjawab —
+            // di sana barulah diketahui resi, barang, atau penolakan. Di sini
+            // cukup getar pendek sebagai tanda "kode tertangkap".
+            navigator.vibrate?.(25);
 
             window.dispatchEvent(new CustomEvent('camera-scan', { detail: { code } }));
         },

@@ -204,14 +204,15 @@ export default function returnStation(config) {
                 this.manualEntry = true;
                 this.pendingTracking = payload.tracking_number;
                 this.stage = 'collect';
-                this.report('error', payload.message, code);
+                // Bukan kegagalan, hanya berpindah ke input manual.
+                this.report('error', payload.message, code, 'rejected');
 
                 return;
             }
 
             this.manualEntry = false;
             this.adopt(payload);
-            this.report('success', `${payload.return.code} — periksa ${payload.items.length} baris barang.`, code);
+            this.report('success', `${payload.return.code} — periksa ${payload.items.length} baris barang.`, code, 'resi');
         },
 
         /**
@@ -234,7 +235,7 @@ export default function returnStation(config) {
 
             const scanned = payload.scanned;
 
-            this.report('success', `${scanned.name} — ${scanned.quantity} ${scanned.unit}`, code);
+            this.report('success', `${scanned.name} — ${scanned.quantity} ${scanned.unit}`, code, 'item');
         },
 
         async removeItem(item) {
@@ -337,7 +338,9 @@ export default function returnStation(config) {
                 });
 
                 this.feedback = { type: 'success', message: payload.message };
-                signal('success');
+                // Paket selesai diterima: bunyi paling menonjol, sama seperti
+                // paket lengkap di stasiun packing.
+                signal('complete');
 
                 this.autoContinue ? setTimeout(() => this.reset(), 1400) : (this.stage = 'review');
             } catch (error) {
@@ -388,7 +391,10 @@ export default function returnStation(config) {
             return payload;
         },
 
-        report(type, message, code) {
+        /**
+         * @param {string} sound Nada yang dibunyikan — lihat feedback.js.
+         */
+        report(type, message, code, sound = null) {
             this.feedback = { type, message };
 
             if (code) {
@@ -396,7 +402,7 @@ export default function returnStation(config) {
                 this.history = this.history.slice(0, 6);
             }
 
-            signal(type);
+            signal(sound ?? (type === 'success' ? 'item' : 'error'));
         },
 
         focusInput() {
