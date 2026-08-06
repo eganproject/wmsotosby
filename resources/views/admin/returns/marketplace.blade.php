@@ -89,7 +89,22 @@
                                 'scanHint' => "isResiStage
                                     ? 'Arahkan ke label resi pada paket yang dikembalikan.'
                                     : items.length + ' baris · ' + totalUnits + ' unit tercatat pada paket ini.'",
+                                'scanLines' => "isResiStage ? [] : items.map((item) => ({
+                                    id: item.id,
+                                    sku: item.sku,
+                                    completed: false,
+                                    label: item.quantity + ' ' + item.unit,
+                                }))",
                             ])
+
+                            {{-- Pengali jumlah, hanya saat isi paket diinput sendiri. --}}
+                            <label x-show="manualEntry && ! isResiStage" x-cloak
+                                   class="flex shrink-0 items-center gap-1 self-stretch rounded-2xl bg-white/10 px-2.5 ring-1 ring-inset ring-white/15"
+                                   title="Jumlah yang ditambahkan sekali scan">
+                                <span class="text-sm font-semibold text-white/40">&times;</span>
+                                <input type="number" min="1" max="9999" inputmode="numeric" x-model.number="bulk"
+                                       class="w-10 border-0 bg-transparent p-0 text-center text-base font-semibold text-white focus:ring-0">
+                            </label>
 
                             <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
                                 <div class="relative">

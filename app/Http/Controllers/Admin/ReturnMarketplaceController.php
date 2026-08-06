@@ -124,7 +124,11 @@ class ReturnMarketplaceController extends Controller implements HasMiddleware
             'tracking_number' => ['nullable', 'string', 'max:100'],
             'sender' => ['nullable', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:191'],
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:9999'],
         ]);
+
+        // Retur borongan discan sekali dengan menyebut jumlahnya.
+        $quantity = max(1, (int) ($data['quantity'] ?? 1));
 
         $product = $this->productFor($data['code']);
 
@@ -136,7 +140,7 @@ class ReturnMarketplaceController extends Controller implements HasMiddleware
             ]);
         }
 
-        $return = DB::transaction(function () use ($data, $tracking, $product) {
+        $return = DB::transaction(function () use ($data, $tracking, $product, $quantity) {
             $return = ReturnReceipt::create([
                 'code' => ReturnReceipt::nextCode(),
                 'date' => now()->toDateString(),
@@ -151,8 +155,8 @@ class ReturnMarketplaceController extends Controller implements HasMiddleware
 
             $return->items()->create([
                 'product_id' => $product->id,
-                'quantity' => 1,
-                'good_quantity' => 1,
+                'quantity' => $quantity,
+                'good_quantity' => $quantity,
                 'damaged_quantity' => 0,
             ]);
 
@@ -161,7 +165,7 @@ class ReturnMarketplaceController extends Controller implements HasMiddleware
 
         return response()->json([
             'found' => true,
-            'scanned' => $this->scannedInfo($product, 1),
+            'scanned' => $this->scannedInfo($product, $quantity),
         ] + $this->payload($return, null));
     }
 
@@ -172,24 +176,29 @@ class ReturnMarketplaceController extends Controller implements HasMiddleware
     {
         $this->guardEditable($return);
 
-        $code = $request->validate(['code' => ['required', 'string', 'max:191']])['code'];
+        $data = $request->validate([
+            'code' => ['required', 'string', 'max:191'],
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:9999'],
+        ]);
 
-        $product = $this->productFor($code);
+        $quantity = max(1, (int) ($data['quantity'] ?? 1));
 
-        $item = DB::transaction(function () use ($return, $product) {
+        $product = $this->productFor($data['code']);
+
+        $item = DB::transaction(function () use ($return, $product, $quantity) {
             $item = $return->items()->where('product_id', $product->id)->first();
 
             if ($item) {
                 // Unit baru dianggap layak jual sampai operator menyatakan lain.
                 $item->update([
-                    'quantity' => $item->quantity + 1,
-                    'good_quantity' => $item->good_quantity + 1,
+                    'quantity' => $item->quantity + $quantity,
+                    'good_quantity' => $item->good_quantity + $quantity,
                 ]);
             } else {
                 $item = $return->items()->create([
                     'product_id' => $product->id,
-                    'quantity' => 1,
-                    'good_quantity' => 1,
+                    'quantity' => $quantity,
+                    'good_quantity' => $quantity,
                     'damaged_quantity' => 0,
                 ]);
             }

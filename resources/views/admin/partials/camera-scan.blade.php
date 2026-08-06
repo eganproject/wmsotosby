@@ -122,9 +122,14 @@
                                :class="line.completed ? 'text-white/40 line-through' : 'text-white'"
                                x-text="line.sku"></p>
 
+                            {{--
+                                Stasiun packing punya target per baris, jadi
+                                terbaca "2/3". Retur tidak: yang tercatat
+                                adalah apa yang ditemukan, bukan yang ditagih.
+                            --}}
                             <p class="shrink-0 text-xs font-semibold tabular-nums"
                                :class="line.completed ? 'text-emerald-300' : 'text-white'"
-                               x-text="`${line.scanned}/${line.quantity}`"></p>
+                               x-text="line.label ?? `${line.scanned}/${line.quantity}`"></p>
                         </div>
                     </template>
                 </div>

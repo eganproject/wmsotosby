@@ -142,6 +142,47 @@ class ManualReturnTest extends TestCase
         $this->assertSame(2, $return->refresh()->items->first()->quantity);
     }
 
+    /**
+     * Retur borongan sama tidak masuk akalnya dengan pesanan borongan:
+     * seratus pcs tidak dipindai seratus kali.
+     */
+    public function test_a_bulk_return_is_scanned_once_with_its_quantity(): void
+    {
+        $this->actingAs($this->admin)->postJson(route('admin.returns.marketplace.manual'), [
+            'tracking_number' => 'MANUAL-BULK',
+            'code' => 'FLT-OLI-STD',
+            'quantity' => 60,
+        ])->assertOk()->assertJsonPath('scanned.quantity', 60);
+
+        $return = ReturnReceipt::with('items')->latest('id')->firstOrFail();
+
+        $this->assertSame(60, $return->items->first()->quantity);
+        $this->assertSame(60, $return->items->first()->good_quantity);
+
+        // Batch berikutnya menambah pada baris yang sama.
+        $this->actingAs($this->admin)->postJson(route('admin.returns.marketplace.item', $return), [
+            'code' => 'FLT-OLI-STD',
+            'quantity' => 40,
+        ])->assertOk();
+
+        $this->assertSame(100, $return->refresh()->items->first()->quantity);
+    }
+
+    public function test_a_return_scan_without_a_quantity_still_adds_one(): void
+    {
+        $return = $this->openManualReturn();
+
+        $this->assertSame(1, $return->items->first()->quantity);
+    }
+
+    public function test_the_station_offers_a_multiplier(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.returns.marketplace'))
+            ->assertOk()
+            ->assertSee('x-model.number="bulk"', false)
+            ->assertSee('Jumlah yang ditambahkan sekali scan');
+    }
+
     public function test_the_station_explains_the_manual_rule(): void
     {
         $this->actingAs($this->admin)->get(route('admin.returns.marketplace'))

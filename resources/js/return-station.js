@@ -39,6 +39,15 @@ export default function returnStation(config) {
         history: [],
         autoContinue: true,
 
+        /**
+         * Jumlah yang ditambahkan sekali scan.
+         *
+         * Retur borongan sama tidak masuk akalnya dengan pesanan borongan:
+         * seratus pcs tidak dipindai seratus kali. Kembali ke satu setiap
+         * selesai agar scan berikutnya tidak ikut terkali.
+         */
+        bulk: 1,
+
         init() {
             this.focusInput();
         },
@@ -212,7 +221,9 @@ export default function returnStation(config) {
 
             this.manualEntry = false;
             this.adopt(payload);
-            this.report('success', `${payload.return.code} — periksa ${payload.items.length} baris barang.`, code, 'resi');
+            // Sependek pesan di stasiun packing: nomor dokumennya sudah
+            // tampil di kartu identitas paket.
+            this.report('success', `Paket dibuka · ${payload.items.length} baris`, code, 'resi');
         },
 
         /**
@@ -226,16 +237,21 @@ export default function returnStation(config) {
                 return;
             }
 
+            const quantity = Math.max(1, Number(this.bulk) || 1);
+
             const payload = this.document
-                ? await this.post(this.urls.item, { code })
-                : await this.post(this.urls.manual, { tracking_number: this.pendingTracking, code });
+                ? await this.post(this.urls.item, { code, quantity })
+                : await this.post(this.urls.manual, { tracking_number: this.pendingTracking, code, quantity });
+
+            this.bulk = 1;
 
             // Hasil pemeriksaan yang sudah diketik tidak ikut tertimpa.
             this.adopt(payload, true);
 
             const scanned = payload.scanned;
 
-            this.report('success', `${scanned.name} — ${scanned.quantity} ${scanned.unit}`, code, 'item');
+            // SKU, bukan nama katalog — sama seperti stasiun packing.
+            this.report('success', `${scanned.sku} · ${scanned.quantity} ${scanned.unit}`, code, 'item');
         },
 
         async removeItem(item) {
