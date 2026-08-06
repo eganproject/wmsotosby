@@ -195,6 +195,91 @@ class MarketplaceIntakeTest extends TestCase
         $this->assertSame(0, $outbound->refresh()->totalScanned());
     }
 
+    /* --------------------------------------------------- borongan ------- */
+
+    /**
+     * Pesanan seratus pcs tidak masuk akal dipindai seratus kali. Barangnya
+     * discan sekali dengan menyebut jumlahnya.
+     */
+    public function test_a_bulk_line_is_scanned_once_with_its_quantity(): void
+    {
+        $this->giveStock(200);
+        $this->importOrder('SPXID111', [['FLT-OLI-STD', 100]]);
+
+        $this->actingAs($this->admin)->postJson(route('admin.outbounds.marketplace.store'), ['code' => 'SPXID111']);
+
+        $outbound = Outbound::latest('id')->firstOrFail();
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.scan.item', $outbound), ['code' => 'FLT-OLI-STD', 'quantity' => 100])
+            ->assertOk()
+            ->assertJsonPath('progress.scanned', 100)
+            ->assertJsonPath('progress.ready', true);
+
+        $this->assertSame(100, $outbound->refresh()->totalScanned());
+    }
+
+    public function test_a_bulk_quantity_may_be_split_across_scans(): void
+    {
+        $this->giveStock(200);
+        $this->importOrder('SPXID111', [['FLT-OLI-STD', 100]]);
+
+        $this->actingAs($this->admin)->postJson(route('admin.outbounds.marketplace.store'), ['code' => 'SPXID111']);
+        $outbound = Outbound::latest('id')->firstOrFail();
+
+        // Tiga dus isi 40, 40, dan 20.
+        foreach ([40, 40, 20] as $batch) {
+            $this->actingAs($this->admin)
+                ->postJson(route('admin.outbounds.scan.item', $outbound), ['code' => 'FLT-OLI-STD', 'quantity' => $batch])
+                ->assertOk();
+        }
+
+        $this->assertSame(100, $outbound->refresh()->totalScanned());
+    }
+
+    /**
+     * Menyebut jumlah tidak boleh jadi jalan memasukkan lebih banyak daripada
+     * yang diminta pesanan.
+     */
+    public function test_a_bulk_quantity_may_not_exceed_what_the_order_asks(): void
+    {
+        $this->giveStock(200);
+        $this->importOrder('SPXID111', [['FLT-OLI-STD', 5]]);
+
+        $this->actingAs($this->admin)->postJson(route('admin.outbounds.marketplace.store'), ['code' => 'SPXID111']);
+        $outbound = Outbound::latest('id')->firstOrFail();
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.scan.item', $outbound), ['code' => 'FLT-OLI-STD', 'quantity' => 9])
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'errors.code.0',
+                'Filter Oli Standar (SKU FLT-OLI-STD) sisa 5 pcs lagi, tidak bisa menambah 9.',
+            );
+
+        $this->assertSame(0, $outbound->refresh()->totalScanned());
+    }
+
+    public function test_a_scan_without_a_quantity_still_adds_one(): void
+    {
+        $this->giveStock(10);
+        $this->importOrder('SPXID111', [['FLT-OLI-STD', 3]]);
+
+        $this->actingAs($this->admin)->postJson(route('admin.outbounds.marketplace.store'), ['code' => 'SPXID111']);
+        $outbound = Outbound::latest('id')->firstOrFail();
+
+        $this->scanItem($outbound, 'FLT-OLI-STD')->assertOk()->assertJsonPath('progress.scanned', 1);
+    }
+
+    public function test_the_station_offers_a_multiplier_and_a_one_tap_finish(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.outbounds.marketplace'))
+            ->assertOk()
+            ->assertSee('x-model.number="bulk"', false)
+            ->assertSee('fillLine(line)', false)
+            ->assertSee('Jumlah yang ditambahkan sekali scan');
+    }
+
     /* --------------------------------------------------- alur berantai --- */
 
     /**

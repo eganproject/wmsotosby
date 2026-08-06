@@ -85,6 +85,18 @@
                                     : 'Langkah 1: pindai label resi pada paket.'",
                             ])
 
+                            {{--
+                                Pengali jumlah. Hanya muncul saat memindai barang:
+                                pada tahap resi angkanya tidak punya arti.
+                            --}}
+                            <label x-show="isItemStage" x-cloak
+                                   class="flex shrink-0 items-center gap-1 self-stretch rounded-2xl bg-white/10 px-2.5 ring-1 ring-inset ring-white/15"
+                                   title="Jumlah yang ditambahkan sekali scan">
+                                <span class="text-sm font-semibold text-white/40">&times;</span>
+                                <input type="number" min="1" max="9999" inputmode="numeric" x-model.number="bulk"
+                                       class="w-10 border-0 bg-transparent p-0 text-center text-base font-semibold text-white focus:ring-0">
+                            </label>
+
                             <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">
                                 <div class="relative">
                                     <span class="pointer-events-none absolute inset-y-0 left-0 flex w-12 items-center justify-center text-white/30">
@@ -251,12 +263,21 @@
                                                 </div>
                                             </div>
 
-                                            <div class="shrink-0 text-right">
+                                            <div class="flex shrink-0 flex-col items-end gap-1.5">
                                                 <p class="text-sm font-semibold text-ink-950">
                                                     <span x-text="line.scanned"></span><span class="text-ink-300" x-text="`/${line.quantity}`"></span>
                                                 </p>
                                                 <p class="text-[11px]" :class="line.completed ? 'text-emerald-600' : 'text-ink-400'"
                                                    x-text="line.completed ? 'selesai' : `sisa ${line.quantity - line.scanned}`"></p>
+
+                                                {{--
+                                                    Satu ketuk menuntaskan sisa baris — untuk barang yang
+                                                    datang dalam dus tersegel dan dihitung dari labelnya.
+                                                --}}
+                                                <button type="button" x-show="! line.completed && ! line.short" x-cloak
+                                                        x-on:click="fillLine(line)" :disabled="busy"
+                                                        class="inline-flex h-7 items-center rounded-lg bg-ink-100 px-2 text-[11px] font-semibold text-ink-700 transition hover:bg-ink-200 disabled:opacity-40"
+                                                        x-text="`Tandai ${line.quantity - line.scanned}`"></button>
                                             </div>
                                         </div>
                                     </li>

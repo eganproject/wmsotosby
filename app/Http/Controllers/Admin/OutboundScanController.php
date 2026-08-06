@@ -60,9 +60,17 @@ class OutboundScanController extends Controller implements HasMiddleware
     {
         $code = $this->code($request);
 
+        // Pesanan borongan cukup discan sekali dengan menyebut jumlahnya.
+        // Tanpa jumlah, satu scan tetap berarti satu unit.
+        $request->validate([
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:9999'],
+        ]);
+
+        $quantity = max(1, (int) $request->input('quantity', 1));
+
         $outbound->load('items.product');
 
-        $result = $this->scanner->scanItem($outbound, $code);
+        $result = $this->scanner->scanItem($outbound, $code, $quantity);
 
         return response()->json($result + ['progress' => $this->scanner->progress($outbound)]);
     }

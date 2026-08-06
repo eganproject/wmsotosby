@@ -34,6 +34,15 @@ export default function packingStation(config) {
         /** Lanjut sendiri ke resi berikutnya begitu satu paket lengkap. */
         autoContinue: true,
 
+        /**
+         * Jumlah yang ditambahkan sekali scan.
+         *
+         * Pesanan borongan seratus pcs tidak masuk akal dipindai seratus
+         * kali. Isi angkanya, scan sekali, lalu angkanya kembali ke satu
+         * supaya scan berikutnya tidak ikut terkali tanpa sengaja.
+         */
+        bulk: 1,
+
         init() {
             this.focusInput();
         },
@@ -150,14 +159,49 @@ export default function packingStation(config) {
         },
 
         async scanItem(code) {
-            const payload = await this.post(this.urls.item, { code });
+            const quantity = Math.max(1, Number(this.bulk) || 1);
 
+            const payload = await this.post(this.urls.item, { code, quantity });
+
+            this.bulk = 1;
             this.progress = payload.progress;
             this.report('success', payload.message, code);
 
             // Unit terakhir menutup paket. Tidak ada tombol, tidak ada dialog:
             // paketnya masuk antrean siap kirim dan layar lanjut sendiri.
             if (this.progress.ready) this.completePackage();
+        },
+
+        /**
+         * Tuntaskan sisa satu baris sekaligus.
+         *
+         * Dipakai saat barangnya datang dalam dus tersegel: isinya dihitung
+         * dari label dus, bukan dibuka lalu dipindai satu per satu.
+         */
+        async fillLine(line) {
+            const remaining = line.quantity - line.scanned;
+
+            if (this.busy || remaining < 1) return;
+
+            this.busy = true;
+            this.feedback = null;
+
+            try {
+                const payload = await this.post(this.urls.item, {
+                    code: line.sku,
+                    quantity: remaining,
+                });
+
+                this.progress = payload.progress;
+                this.report('success', payload.message, line.sku);
+
+                if (this.progress.ready) this.completePackage();
+            } catch (error) {
+                this.report('error', error.message, line.sku);
+            } finally {
+                this.busy = false;
+                this.focusInput();
+            }
         },
 
         /* -------------------------------------------------- penyelesaian */

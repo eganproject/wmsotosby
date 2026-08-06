@@ -110,7 +110,7 @@ class OutboundScanService
     }
 
     /**
-     * Scan satu barang. Setiap scan menambah satu unit pada baris terkait.
+     * Scan barang. Satu scan menambah satu unit, kecuali jumlahnya disebut.
      *
      * Kode yang discan dicocokkan ke dua kolom pada master barang: barcode
      * lebih dulu, lalu SKU. Barang tanpa barcode tetap bisa discan memakai
@@ -118,9 +118,15 @@ class OutboundScanService
      *
      * @return array<string, mixed>
      */
-    public function scanItem(Outbound $outbound, string $code): array
+    public function scanItem(Outbound $outbound, string $code, int $quantity = 1): array
     {
         $this->guardScannable($outbound);
+
+        if ($quantity < 1) {
+            throw ValidationException::withMessages([
+                'code' => 'Jumlah scan minimal 1.',
+            ]);
+        }
 
         // Inti aturannya: barang tidak boleh discan sebelum resi diverifikasi.
         if (! $outbound->isResiVerified()) {
@@ -161,6 +167,17 @@ class OutboundScanService
             ]);
         }
 
+        // Pesanan borongan discan sekali lalu jumlahnya disebut, bukan
+        // dipindai seratus kali. Yang tidak boleh adalah menyebut lebih
+        // banyak daripada yang diminta pesanan.
+        $remaining = $item->quantity - $item->scanned_quantity;
+
+        if ($quantity > $remaining) {
+            throw ValidationException::withMessages([
+                'code' => "{$item->product->name} (SKU {$item->product->sku}) sisa {$remaining} {$item->product->unit} lagi, tidak bisa menambah {$quantity}.",
+            ]);
+        }
+
         // Barang yang stoknya tidak tercatat tidak boleh keluar. Diperiksa
         // ulang di sini karena stok bisa habis oleh paket lain setelah resi
         // ini dibuka.
@@ -170,15 +187,16 @@ class OutboundScanService
             ]);
         }
 
-        DB::transaction(function () use ($item) {
-            $item->increment('scanned_quantity');
+        DB::transaction(function () use ($item, $quantity) {
+            $item->increment('scanned_quantity', $quantity);
         });
 
         $outbound->load('items.product');
         $item->refresh();
 
         return [
-            'message' => "{$item->product->name} — {$item->scanned_quantity}/{$item->quantity} {$item->product->unit}",
+            'message' => "{$item->product->name} — {$item->scanned_quantity}/{$item->quantity} {$item->product->unit}"
+                .($quantity > 1 ? " (+{$quantity})" : ''),
             'matched_by' => $matchedField,
             'sku' => $item->product->sku,
             'item_id' => $item->id,
