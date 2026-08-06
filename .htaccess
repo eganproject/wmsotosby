@@ -1,0 +1,47 @@
+# Berkas ini hanya terbaca bila document root domain menunjuk ke folder
+# proyek, bukan ke public/ — keadaan yang lazim di shared hosting seperti
+# Hostinger ketika seluruh proyek diunggah ke public_html.
+#
+# Tanpa berkas ini Apache menerima permintaan ke folder proyek, tidak
+# menemukan index.php di sana, dan karena penampilan isi folder dimatikan,
+# jawabannya menjadi 403 Forbidden.
+#
+# Bila document root sudah diarahkan ke public/, berkas ini tidak pernah
+# dibaca dan tidak berpengaruh apa pun.
+
+Options -Indexes
+
+# ─────────────────────────────────────────────────────────────────────
+# Menaruh proyek di dalam document root berarti seluruh isinya ikut
+# terjangkau dari internet. Yang tidak boleh dilayani ditutup lebih dulu,
+# sebelum aturan pengalihan di bawah sempat berjalan.
+# ─────────────────────────────────────────────────────────────────────
+
+# Berkas berawalan titik: .env menyimpan kunci aplikasi dan sandi database.
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Riwayat git, berkas komposer, dan skrip konsol.
+    RewriteRule ^(\.env|\.git|\.htaccess|artisan|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml) - [F,L]
+
+    # Seluruh direktori kode dan data. Tidak ada satu pun yang perlu
+    # dilayani langsung — semuanya dipanggil dari public/index.php.
+    RewriteRule ^(app|bootstrap|config|database|lang|node_modules|resources|routes|storage|tests|vendor)($|/) - [F,L]
+
+    # ─────────────────────────────────────────────────────────────────
+    # Sisanya dilayani dari public/. Permintaan yang sudah berada di sana
+    # dilewati supaya tidak berputar tanpa henti.
+    # ─────────────────────────────────────────────────────────────────
+    RewriteCond %{REQUEST_URI} !^/?public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
