@@ -190,6 +190,30 @@ class ApprovalFlowTest extends TestCase
         $this->assertSame(10, $this->product->refresh()->stock);
     }
 
+    /**
+     * Saringan jenis dokumen bertahan setelah satu keputusan diambil —
+     * kalau tidak, penyetuju harus menyaring ulang tiap kali menyetujui.
+     */
+    public function test_the_inbox_filter_survives_a_decision(): void
+    {
+        $inbound = $this->makeInbound(10);
+        $this->actingAs($this->staff)->post(route('admin.inbounds.submit', $inbound));
+
+        $this->actingAs($this->approver)
+            ->post(route('admin.approvals.approve', ['inbound', $inbound->id]), ['filter' => 'inbound'])
+            ->assertRedirect(route('admin.approvals.index', ['type' => 'inbound']));
+    }
+
+    public function test_a_decision_without_a_filter_returns_to_the_whole_inbox(): void
+    {
+        $inbound = $this->makeInbound(10);
+        $this->actingAs($this->staff)->post(route('admin.inbounds.submit', $inbound));
+
+        $this->actingAs($this->approver)
+            ->post(route('admin.approvals.approve', ['inbound', $inbound->id]))
+            ->assertRedirect(route('admin.approvals.index'));
+    }
+
     /* --------------------------------------------------- halaman --------- */
 
     public function test_the_approval_inbox_lists_pending_documents(): void

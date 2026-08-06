@@ -97,6 +97,10 @@
                                             <form method="POST" action="{{ route('admin.approvals.approve', [$group['key'], $document->id]) }}"
                                                   x-show="! rejecting">
                                                 @csrf
+                                                {{-- Saringan jenis dokumen ikut terbawa agar tidak hilang setelah diputuskan. --}}
+                                                @if (request()->filled('type'))
+                                                    <input type="hidden" name="filter" value="{{ request('type') }}">
+                                                @endif
                                                 <x-ui.button type="submit" icon="check" class="w-full">Setujui</x-ui.button>
                                             </form>
 
@@ -108,6 +112,9 @@
                                             <form method="POST" action="{{ route('admin.approvals.reject', [$group['key'], $document->id]) }}"
                                                   x-show="rejecting" x-cloak class="space-y-2">
                                                 @csrf
+                                                @if (request()->filled('type'))
+                                                    <input type="hidden" name="filter" value="{{ request('type') }}">
+                                                @endif
                                                 <textarea name="rejection_reason" rows="2" required
                                                           placeholder="Alasan penolakan…"
                                                           class="block w-full rounded-xl border-ink-200 bg-white text-xs text-ink-950 placeholder:text-ink-300 shadow-soft transition focus:border-red-500 focus:ring-1 focus:ring-red-500"></textarea>

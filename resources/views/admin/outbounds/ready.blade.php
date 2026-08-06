@@ -64,6 +64,21 @@
             @csrf
 
             {{--
+                Filter yang sedang aktif ikut terkirim.
+
+                Tanpa ini pemrosesan mengandalkan `back()`, yang membaca header
+                Referer — dan header itu tidak selalu ada, sedangkan cadangan
+                sesinya tidak pernah diperbarui pada navigasi AJAX. Akibatnya
+                operator terlempar ke daftar tanpa filter setelah memproses,
+                lalu harus menyaring ulang dari awal.
+            --}}
+            @foreach (['search', 'marketplace'] as $filter)
+                @if (request()->filled($filter))
+                    <input type="hidden" name="{{ $filter }}" value="{{ request($filter) }}">
+                @endif
+            @endforeach
+
+            {{--
                 Bilah aksi berada di luar kartu daftarnya. Sempat diletakkan
                 di dalam kartu ber-overflow-hidden, dan di sana `sticky` tidak
                 pernah bekerja: elemen ber-overflow menjadi wadah gulirnya

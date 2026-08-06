@@ -111,7 +111,7 @@ class ApprovalController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function approve(string $type, int $id): RedirectResponse
+    public function approve(Request $request, string $type, int $id): RedirectResponse
     {
         [$document, $config] = $this->resolve($type, $id);
 
@@ -120,10 +120,12 @@ class ApprovalController extends Controller implements HasMiddleware
         try {
             $this->approvals->approve($document);
         } catch (ValidationException $exception) {
-            return back()->with('error', collect($exception->errors())->flatten()->implode(' '));
+            return $this->backToInbox($request)
+                ->with('error', collect($exception->errors())->flatten()->implode(' '));
         }
 
-        return back()->with('success', "Dokumen {$document->code} disetujui. Stok telah diperbarui.");
+        return $this->backToInbox($request)
+            ->with('success', "Dokumen {$document->code} disetujui. Stok telah diperbarui.");
     }
 
     public function reject(Request $request, string $type, int $id): RedirectResponse
@@ -139,10 +141,32 @@ class ApprovalController extends Controller implements HasMiddleware
         try {
             $this->approvals->reject($document, $reason);
         } catch (ValidationException $exception) {
-            return back()->with('error', collect($exception->errors())->flatten()->implode(' '));
+            return $this->backToInbox($request)
+                ->with('error', collect($exception->errors())->flatten()->implode(' '));
         }
 
-        return back()->with('success', "Dokumen {$document->code} ditolak dan dikembalikan ke penyusunnya.");
+        return $this->backToInbox($request)
+            ->with('success', "Dokumen {$document->code} ditolak dan dikembalikan ke penyusunnya.");
+    }
+
+    /**
+     * Kembali ke kotak masuk dengan saringan yang tadi dipakai.
+     *
+     * Sama seperti antrean siap kirim: `back()` membaca header Referer yang
+     * tidak selalu ada, dan cadangannya di sesi tidak pernah diperbarui pada
+     * navigasi AJAX — sehingga saringannya hilang setelah satu keputusan.
+     */
+    protected function backToInbox(Request $request): RedirectResponse
+    {
+        // Dikirim sebagai "filter", bukan "type": nama kedua sudah dipakai
+        // parameter route jenis dokumen yang sedang diputuskan, dan dua hal
+        // berbeda dengan nama sama cepat atau lambat tertukar.
+        $filter = $request->input('filter');
+
+        return redirect()->route(
+            'admin.approvals.index',
+            filled($filter) ? ['type' => $filter] : [],
+        );
     }
 
     /**

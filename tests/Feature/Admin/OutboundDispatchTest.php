@@ -138,6 +138,50 @@ class OutboundDispatchTest extends TestCase
         $this->assertSame(0, $this->product->refresh()->stock);
     }
 
+    /**
+     * Filter yang sedang dipakai harus bertahan setelah memproses.
+     *
+     * Sebelumnya pemrosesan mengandalkan back(), yang membaca header Referer —
+     * tidak selalu ada, dan cadangan sesinya tidak pernah diperbarui pada
+     * navigasi AJAX. Akibatnya operator yang menyaring satu marketplace
+     * terlempar ke seluruh antrean dan harus menyaring ulang.
+     */
+    public function test_the_active_filter_survives_processing(): void
+    {
+        $first = $this->makePackage('SPXID111', 2, scanned: 2);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.outbounds.ready.process'), [
+                'ids' => [$first->id],
+                'search' => 'SPXID',
+                'marketplace' => 'Shopee',
+            ])
+            ->assertRedirect(route('admin.outbounds.ready', [
+                'search' => 'SPXID',
+                'marketplace' => 'Shopee',
+            ]));
+    }
+
+    public function test_processing_without_a_filter_returns_to_the_plain_queue(): void
+    {
+        $outbound = $this->makePackage('SPXID111', 1, scanned: 1);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.outbounds.ready.process'), ['ids' => [$outbound->id]])
+            ->assertRedirect(route('admin.outbounds.ready'));
+    }
+
+    public function test_the_queue_form_carries_the_active_filter(): void
+    {
+        $this->makePackage('SPXID111', 2, scanned: 2);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.outbounds.ready', ['search' => 'SPXID', 'marketplace' => 'Shopee']))
+            ->assertOk()
+            ->assertSee('<input type="hidden" name="search" value="SPXID">', false)
+            ->assertSee('<input type="hidden" name="marketplace" value="Shopee">', false);
+    }
+
     public function test_processing_requires_the_posting_permission(): void
     {
         $outbound = $this->makePackage('SPXID111', 1, scanned: 1);

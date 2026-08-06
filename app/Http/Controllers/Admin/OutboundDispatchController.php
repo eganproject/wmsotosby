@@ -69,7 +69,8 @@ class OutboundDispatchController extends Controller implements HasMiddleware
             ->get();
 
         if ($documents->isEmpty()) {
-            return back()->with('error', 'Tidak ada paket yang bisa diproses. Mungkin sudah dikerjakan orang lain.');
+            return $this->backToQueue($request)
+                ->with('error', 'Tidak ada paket yang bisa diproses. Mungkin sudah dikerjakan orang lain.');
         }
 
         $selfApprove = $request->user()->can('outbounds.approve');
@@ -89,11 +90,28 @@ class OutboundDispatchController extends Controller implements HasMiddleware
             }
         }
 
-        return back()
+        return $this->backToQueue($request)
             ->with('success', $done ? $this->summary($done, $selfApprove) : null)
             ->with('error', $failed
                 ? count($failed).' paket gagal diproses. '.implode(' | ', $failed)
                 : null);
+    }
+
+    /**
+     * Kembali ke antrean dengan filter yang tadi dipakai.
+     *
+     * Sengaja tidak memakai `back()`: fungsi itu membaca header Referer, yang
+     * tidak selalu dikirim, dan cadangannya di sesi tidak pernah diperbarui
+     * pada navigasi AJAX. Filternya dibawa sendiri oleh form, jadi tujuannya
+     * pasti — operator yang menyaring satu marketplace tidak terlempar ke
+     * seluruh antrean setelah memproses.
+     */
+    protected function backToQueue(Request $request): RedirectResponse
+    {
+        return redirect()->route('admin.outbounds.ready', array_filter(
+            $request->only(['search', 'marketplace']),
+            fn ($value) => filled($value),
+        ));
     }
 
     /**
