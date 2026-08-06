@@ -38,9 +38,15 @@ class ProductImportController extends Controller implements HasMiddleware
 
     public function store(Request $request): RedirectResponse
     {
+        // Lihat catatan pada ShipmentImportController: pemeriksaan memakai
+        // akhiran berkas karena `mimes:` bergantung pada ekstensi PHP
+        // `fileinfo` yang belum tentu aktif di server.
         $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
-        ], [], ['file' => 'berkas']);
+            'file' => ['required', 'file', 'extensions:xlsx,xls,csv,txt', 'max:20480'],
+        ], [
+            'file.extensions' => 'Berkas harus berakhiran .xlsx, .xls, atau .csv. Unduh templatnya bila ragu.',
+            'file.max' => 'Ukuran berkas melebihi 20 MB.',
+        ], ['file' => 'berkas']);
 
         $import = $this->importer->import($request->file('file'));
 

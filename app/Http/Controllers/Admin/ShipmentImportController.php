@@ -74,9 +74,20 @@ class ShipmentImportController extends Controller implements HasMiddleware
 
     public function store(Request $request): RedirectResponse
     {
+        // Diperiksa lewat akhiran berkas, bukan tebakan isi.
+        //
+        // Aturan `mimes:` menebak jenis berkas dari isinya lewat ekstensi PHP
+        // `fileinfo`. Bila ekstensi itu tidak aktif — lazim di shared hosting —
+        // tebakannya selalu gagal dan setiap berkas ditolak, termasuk xlsx yang
+        // sah. Pembaca spreadsheet di bawah tetap menjadi penjaga sebenarnya:
+        // berkas yang isinya bukan spreadsheet ditolak di sana dengan pesan
+        // yang menjelaskan.
         $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
-        ], [], ['file' => 'berkas']);
+            'file' => ['required', 'file', 'extensions:xlsx,xls,csv,txt', 'max:20480'],
+        ], [
+            'file.extensions' => 'Berkas harus berakhiran .xlsx, .xls, atau .csv — hasil eksport langsung dari Ginee.',
+            'file.max' => 'Ukuran berkas melebihi 20 MB.',
+        ], ['file' => 'berkas']);
 
         try {
             $import = $this->importer->import($request->file('file'));
