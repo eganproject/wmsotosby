@@ -84,19 +84,41 @@ php artisan db:seed --class=RolePermissionSeeder
 Seeder itu membuat izin, tiga role, dan akun `admin@wmsotosby.test`
 dengan sandi `password`. **Ganti sandinya begitu berhasil masuk.**
 
-## 5. Berkas hasil build
+## 5. Berkas hasil build — *Vite manifest not found*
 
-`public/build/` tidak ikut ke dalam git. Tanpa berkas ini halaman muncul
-tanpa gaya sama sekali, atau gagal dengan pesan soal manifest Vite.
+Pesan itu berarti `public/build/manifest.json` tidak ada di server. Laravel
+membaca berkas tersebut untuk mengetahui nama berkas CSS dan JS yang
+sebenarnya, karena namanya ber-hash dan berubah setiap kali dibangun.
 
-Di komputer Anda:
+Hostinger tidak menyediakan Node, jadi `npm run build` tidak bisa
+dijalankan di server. Karena itu hasil build **ikut masuk repositori** —
+`.gitignore` sudah disesuaikan untuk itu.
+
+Setiap kali ada perubahan tampilan:
 
 ```bash
-npm run build
+npm run build          # di komputer Anda
+git add public/build
+git commit -m "build ulang aset"
 ```
 
-lalu unggah seluruh isi `public/build/` ke server. Ulangi setiap kali ada
-perubahan tampilan.
+lalu naikkan seperti biasa. Bila mengunggah lewat FTP, kirim seluruh isi
+`public/build/` — folder `assets/` beserta `manifest.json` di sampingnya.
+Ketiganya harus berpasangan: manifest menyebut nama berkas ber-hash, dan
+memperbarui salah satu saja membuat rujukannya meleset.
+
+Isi yang benar hanya tiga berkas, sekitar 300 KB seluruhnya:
+
+```
+public/build/manifest.json
+public/build/assets/app-<hash>.css
+public/build/assets/app-<hash>.js
+```
+
+Bila halaman tampil tanpa gaya sama sekali padahal berkasnya sudah ada,
+periksa `public/hot`. Berkas itu hanya muncul saat `npm run dev` dan
+membuat Laravel mencari server pengembangan yang tidak ada di hosting —
+hapus bila ikut terunggah.
 
 ## 6. Izin berkas
 

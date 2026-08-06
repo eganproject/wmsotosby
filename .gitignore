@@ -1,6 +1,16 @@
 /.phpunit.cache
 /node_modules
-/public/build
+
+# public/build sengaja TIDAK diabaikan.
+#
+# Shared hosting seperti Hostinger tidak menyediakan Node, jadi `npm run
+# build` tidak mungkin dijalankan di server. Bila hasil build tidak ikut
+# masuk repositori, aplikasi naik tanpa berkas manifest dan gagal dengan
+# "Vite manifest not found".
+#
+# Konsekuensinya: jalankan `npm run build` lalu commit hasilnya setiap kali
+# ada perubahan tampilan. Berkasnya kecil (sekitar 300 KB) dan namanya
+# ber-hash, jadi yang lama tergantikan, bukan menumpuk.
 /public/hot
 /public/storage
 /storage/*.key
