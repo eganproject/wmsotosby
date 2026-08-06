@@ -78,11 +78,18 @@
 
                         <div class="flex items-stretch gap-2 px-6 pt-4">
                             @include('admin.partials.camera-scan', [
-                                'scanHint' => "progress
-                                    ? (progress.ready
-                                        ? 'Semua barang terpindai. Paket masuk antrean siap kirim.'
-                                        : `Sisa \${remaining} unit lagi pada paket ini.`)
-                                    : 'Langkah 1: pindai label resi pada paket.'",
+                                // Tahap "paket lengkap" ikut dihitung sebagai langkah 2:
+                                // bagi operator yang penting hanya resi versus barang.
+                                'scanStep' => 'Math.min(2, step)',
+                                'scanTitle' => "isResiStage
+                                    ? 'Scan label resi'
+                                    : (progress && progress.ready ? 'Paket lengkap' : 'Scan barcode barang')",
+                                'scanHint' => "isResiStage
+                                    ? 'Arahkan ke label resi pada paket.'
+                                    : (progress && progress.ready
+                                        ? 'Masuk antrean siap kirim. Arahkan ke resi berikutnya.'
+                                        : 'Sisa ' + remaining + ' unit lagi pada paket ini.')",
+                                'scanLines' => 'isResiStage ? [] : lines',
                             ])
 
                             {{--

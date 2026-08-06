@@ -82,9 +82,13 @@
                         {{-- Kolom input: posisinya tidak pernah berubah --}}
                         <div class="flex items-stretch gap-2 px-6 pt-4">
                             @include('admin.partials.camera-scan', [
-                                'scanHint' => "document
-                                    ? `\${items.length} baris · \${totalUnits} unit tercatat pada paket ini.`
-                                    : 'Langkah 1: pindai label resi paket retur.'",
+                                'scanStep' => 'isResiStage ? 1 : 2',
+                                'scanTitle' => "isResiStage
+                                    ? 'Scan label resi retur'
+                                    : (manualEntry ? 'Scan barang di dalam paket' : 'Periksa isi paket')",
+                                'scanHint' => "isResiStage
+                                    ? 'Arahkan ke label resi pada paket yang dikembalikan.'
+                                    : items.length + ' baris · ' + totalUnits + ' unit tercatat pada paket ini.'",
                             ])
 
                             <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">

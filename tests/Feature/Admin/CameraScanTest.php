@@ -44,7 +44,7 @@ class CameraScanTest extends TestCase
         $this->actingAs($this->admin)->get(route($route))
             ->assertOk()
             ->assertSee('cameraScanner()', false)
-            ->assertSee('Pindai dengan Kamera')
+            ->assertSee('Pindai dengan kamera')
             // Hasil kamera masuk ke kolom kode yang sama dengan scanner genggam.
             ->assertSee('camera-scan.window', false);
     }
@@ -82,8 +82,11 @@ class CameraScanTest extends TestCase
             ->assertOk()
             // Pesan hasil scan dari komponen stasiun.
             ->assertSee('feedback.message', false)
-            // Petunjuk langkah berikutnya, khusus per halaman.
-            ->assertSee('Langkah 1: pindai label resi', false)
+            // Tahap yang sedang berjalan terbaca di dalam layar kamera:
+            // judulnya, nomor langkahnya, dan petunjuk arahnya.
+            ->assertSee('Langkah ${', false)
+            ->assertSee('Scan label resi', false)
+            ->assertSee('Arahkan ke label resi', false)
             ->assertSee('Arahkan kamera ke kode. Hasilnya muncul di sini.');
     }
 

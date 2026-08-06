@@ -68,9 +68,11 @@
                     <div class="p-6 sm:p-10 sm:pt-7">
                         <div class="flex items-stretch gap-2" x-show="! progress.ready">
                             @include('admin.partials.camera-scan', [
+                                'scanStep' => 'isResiStage ? 1 : 2',
+                                'scanTitle' => "isResiStage ? 'Scan label resi' : 'Scan barcode barang'",
                                 'scanHint' => "isResiStage
-                                    ? 'Langkah 1: pindai label resi pada paket.'
-                                    : `\${progress.scanned}/\${progress.total} unit terpindai.`",
+                                    ? 'Arahkan ke label resi pada paket.'
+                                    : progress.scanned + '/' + progress.total + ' unit terpindai.'",
                             ])
 
                         <form data-no-ajax @submit.prevent="submit()" class="min-w-0 flex-1">

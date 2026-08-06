@@ -29,19 +29,43 @@
              x-on:keydown.escape.window="stop()"
              class="fixed inset-0 z-[60] flex flex-col bg-ink-950">
 
-            <div class="flex shrink-0 items-center justify-between gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-                <div class="min-w-0">
-                    <p class="text-sm font-semibold text-white">Pindai dengan Kamera</p>
-                    <p class="truncate text-[11px] text-white/50">
-                        Arahkan ke barcode atau QR. Kamera tetap menyala untuk kode berikutnya.
-                    </p>
-                </div>
+            {{--
+                Kepala layar: apa yang harus dipindai SEKARANG.
 
-                <button type="button" x-on:click="stop()"
-                        class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
-                    <x-icon name="close" class="h-5 w-5" />
-                    <span class="sr-only">Tutup</span>
-                </button>
+                Ini bagian yang paling menentukan. Rail langkah dan judul tahap
+                ada di halaman induk, tetapi kamera menutupinya — sehingga
+                setelah resi terbaca operator tidak tahu apakah harus lanjut ke
+                barang, atau paketnya memang tidak bisa dilanjutkan. Keduanya
+                dibawa masuk ke sini, dengan warna yang berganti mengikuti
+                tahap agar terbaca sekilas tanpa perlu dibaca kata demi kata.
+            --}}
+            <div class="shrink-0 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] transition-colors"
+                 @isset($scanStep) :class="({{ $scanStep }}) > 1 ? 'bg-amber-500' : 'bg-ink-900'" @endisset>
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        @isset($scanStep)
+                            <div class="flex items-center gap-1.5">
+                                @foreach ([1, 2] as $number)
+                                    <span class="h-1.5 w-8 rounded-full transition"
+                                          :class="({{ $scanStep }}) >= {{ $number }} ? 'bg-white' : 'bg-white/25'"></span>
+                                @endforeach
+                                <span class="ml-1 text-[11px] font-semibold uppercase tracking-wider text-white/70"
+                                      x-text="`Langkah ${ {{ $scanStep }} } dari 2`"></span>
+                            </div>
+                        @endisset
+
+                        <p class="mt-1.5 truncate text-lg font-semibold leading-tight text-white"
+                           @isset($scanTitle) x-text="{{ $scanTitle }}" @endisset>
+                            @empty($scanTitle) Pindai dengan Kamera @endempty
+                        </p>
+                    </div>
+
+                    <button type="button" x-on:click="stop()"
+                            class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25">
+                        <x-icon name="close" class="h-5 w-5" />
+                        <span class="sr-only">Tutup</span>
+                    </button>
+                </div>
             </div>
 
             <div class="relative min-h-0 flex-1 overflow-hidden">
@@ -78,6 +102,34 @@
                 Nilai `feedback` diambil dari komponen stasiun yang membungkus
                 partial ini; Alpine mewariskan lingkupnya ke komponen anak.
             --}}
+            {{--
+                Daftar barang yang harus dipindai, versi ringkas.
+
+                Tanpa ini operator tahu "sekarang scan barang" tetapi tidak
+                tahu barang apa dan berapa lagi — informasi yang ada di halaman
+                induk namun tertutup kamera.
+            --}}
+            @isset($scanLines)
+                <div class="max-h-32 shrink-0 overflow-y-auto border-t border-white/10 bg-ink-900/80">
+                    <template x-for="line in {{ $scanLines }}" :key="line.id">
+                        <div class="flex items-center gap-2.5 border-b border-white/5 px-4 py-2">
+                            <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px]"
+                                  :class="line.completed ? 'bg-emerald-500 text-white' : 'bg-white/15 text-white/60'">
+                                <template x-if="line.completed"><x-icon name="check" class="h-3 w-3" /></template>
+                            </span>
+
+                            <p class="min-w-0 flex-1 truncate font-mono text-xs"
+                               :class="line.completed ? 'text-white/40 line-through' : 'text-white'"
+                               x-text="line.sku"></p>
+
+                            <p class="shrink-0 text-xs font-semibold tabular-nums"
+                               :class="line.completed ? 'text-emerald-300' : 'text-white'"
+                               x-text="`${line.scanned}/${line.quantity}`"></p>
+                        </div>
+                    </template>
+                </div>
+            @endisset
+
             <div class="shrink-0 space-y-3 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <div class="flex min-h-[4.5rem] items-start gap-3 rounded-2xl px-4 py-3 transition"
                      :class="feedback
