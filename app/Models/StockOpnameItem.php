@@ -14,9 +14,11 @@ class StockOpnameItem extends Model
         'product_id',
         'system_quantity',
         'counted_quantity',
+        'damaged_quantity',
         'counted_at',
         'counted_by',
         'applied_difference',
+        'applied_damaged',
         'note',
     ];
 
@@ -25,9 +27,23 @@ class StockOpnameItem extends Model
         return [
             'system_quantity' => 'integer',
             'counted_quantity' => 'integer',
+            'damaged_quantity' => 'integer',
             'counted_at' => 'datetime',
             'applied_difference' => 'integer',
+            'applied_damaged' => 'integer',
         ];
+    }
+
+    /**
+     * Unit rusak yang ditemukan pada sesi ini.
+     *
+     * Angkanya ditambahkan ke saldo rusak, bukan menggantikannya: barang rusak
+     * lain bisa saja tersimpan di rak yang tidak ikut dihitung sesi ini, dan
+     * menyamakan saldo dengan temuan satu rak akan menghapusnya diam-diam.
+     */
+    public function hasDamaged(): bool
+    {
+        return $this->damaged_quantity > 0;
     }
 
     public function opname(): BelongsTo

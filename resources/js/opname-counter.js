@@ -20,16 +20,26 @@ export default function opnameCounter() {
          * Satu sesi biasa dikerjakan beberapa orang sekaligus. Bila seluruh
          * baris di halaman ikut terkirim, baris kosong yang sebenarnya sudah
          * dihitung rekan lain akan tertimpa menjadi kosong lagi.
+         *
+         * Kolom rusak ikut diperiksa, bukan hanya kolom bagus: baris yang hanya
+         * diisi jumlah rusaknya tetap baris yang disentuh, dan tanpa penjagaan
+         * ini temuannya terbuang diam-diam saat disimpan.
          */
         pruneUntouched() {
             this.$el.querySelectorAll('[data-count-input]').forEach((input) => {
-                if (input.value !== input.dataset.baseline) return;
+                const id = input.dataset.countInput;
+                const damaged = input.form?.querySelector(`[data-damaged-input="${id}"]`);
 
-                const baseline = input.form?.querySelector(
-                    `[name="baseline[${input.dataset.countInput}]"]`,
-                );
+                const untouched = input.value === input.dataset.baseline
+                    && (! damaged || damaged.value === damaged.dataset.baseline);
+
+                if (! untouched) return;
 
                 input.disabled = true;
+
+                if (damaged) damaged.disabled = true;
+
+                const baseline = input.form?.querySelector(`[name="baseline[${id}]"]`);
 
                 if (baseline) baseline.disabled = true;
             });

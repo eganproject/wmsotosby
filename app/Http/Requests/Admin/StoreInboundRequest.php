@@ -24,8 +24,32 @@ class StoreInboundRequest extends FormRequest
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'items.*.damaged_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'items.*.note' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * Yang rusak adalah bagian dari yang diterima, bukan tambahan di luarnya.
+     *
+     * Diperiksa di sini, bukan lewat aturan lte: pesannya jadi menyebut baris
+     * yang mana, dan aturan bawaan tidak menangani rujukan antar baris berindeks
+     * dengan andal.
+     */
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            foreach ($this->input('items', []) as $index => $item) {
+                $damaged = (int) ($item['damaged_quantity'] ?? 0);
+
+                if ($damaged > (int) ($item['quantity'] ?? 0)) {
+                    $validator->errors()->add(
+                        "items.{$index}.damaged_quantity",
+                        'Jumlah rusak tidak boleh melebihi jumlah yang diterima.',
+                    );
+                }
+            }
+        });
     }
 
     /**

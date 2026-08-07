@@ -43,7 +43,19 @@ class StockService
 
         DB::transaction(function () use ($inbound) {
             foreach ($inbound->items as $item) {
-                $this->move($item->product_id, 'in', $item->quantity, $inbound, "Barang masuk {$inbound->code}");
+                // Yang rusak adalah bagian dari jumlah yang diterima, bukan
+                // tambahan di luarnya — jadi keduanya dipisah di sini supaya
+                // saldo layak jual tidak pernah memuat barang yang penyok.
+                if ($item->goodQuantity() > 0) {
+                    $this->move($item->product_id, 'in', $item->goodQuantity(), $inbound, "Barang masuk {$inbound->code}");
+                }
+
+                if ($item->damaged_quantity > 0) {
+                    $this->move(
+                        $item->product_id, 'in', $item->damaged_quantity, $inbound,
+                        "Barang masuk rusak {$inbound->code}", StockMovement::BUCKET_DAMAGED,
+                    );
+                }
             }
 
             $inbound->forceFill([
@@ -260,21 +272,37 @@ class StockService
 
                 $difference = $item->counted_quantity - $product->stock;
 
-                if ($difference === 0) {
-                    $item->update(['applied_difference' => 0]);
-
-                    continue;
+                if ($difference !== 0) {
+                    $this->move(
+                        $product->id,
+                        $difference > 0 ? 'in' : 'out',
+                        abs($difference),
+                        $opname,
+                        "Stok opname {$opname->code} — {$opname->scopeLabel()}",
+                    );
                 }
 
-                $this->move(
-                    $product->id,
-                    $difference > 0 ? 'in' : 'out',
-                    abs($difference),
-                    $opname,
-                    "Stok opname {$opname->code} — {$opname->scopeLabel()}",
-                );
+                /*
+                    Unit rusak yang ditemukan saat menghitung ditambahkan ke
+                    saldo rusak, bukan menggantikannya: barang rusak lain bisa
+                    saja tersimpan di rak yang tidak ikut dihitung sesi ini.
 
-                $item->update(['applied_difference' => $difference]);
+                    Tanpa ini, temuan seperti itu hanya membuat hasil hitung
+                    lebih kecil — sehingga tercatat sebagai barang hilang,
+                    padahal barangnya masih ada dan mungkin bisa diklaim.
+                */
+                if ($item->damaged_quantity > 0) {
+                    $this->move(
+                        $product->id, 'in', $item->damaged_quantity, $opname,
+                        "Rusak ditemukan saat opname {$opname->code}",
+                        StockMovement::BUCKET_DAMAGED,
+                    );
+                }
+
+                $item->update([
+                    'applied_difference' => $difference,
+                    'applied_damaged' => $item->damaged_quantity,
+                ]);
             }
 
             $opname->forceFill([

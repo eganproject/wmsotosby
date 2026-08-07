@@ -167,11 +167,14 @@ class StockOpnameController extends Controller implements HasMiddleware
         $data = $request->validate([
             'counts' => ['array'],
             'counts.*' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'damaged' => ['array'],
+            'damaged.*' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'baseline' => ['array'],
             'baseline.*' => ['nullable', 'integer'],
-        ], [], ['counts.*' => 'hasil hitung']);
+        ], [], ['counts.*' => 'hasil hitung', 'damaged.*' => 'jumlah rusak']);
 
         $counts = $data['counts'] ?? [];
+        $damaged = $data['damaged'] ?? [];
         $baselines = $data['baseline'] ?? [];
 
         $items = $opname->items()->whereIn('id', array_keys($counts))->get()->keyBy('id');
@@ -179,7 +182,7 @@ class StockOpnameController extends Controller implements HasMiddleware
         $changed = 0;
         $conflicts = [];
 
-        DB::transaction(function () use ($counts, $baselines, $items, &$changed, &$conflicts) {
+        DB::transaction(function () use ($counts, $damaged, $baselines, $items, &$changed, &$conflicts) {
             foreach ($counts as $id => $value) {
                 $item = $items->get((int) $id);
 
@@ -190,7 +193,11 @@ class StockOpnameController extends Controller implements HasMiddleware
                 // Kolom dikosongkan berarti hitungannya dibatalkan, bukan nol.
                 $counted = $this->normalizeCount($value);
 
-                if ($item->counted_quantity === $counted) {
+                // Hitungan yang dibatalkan ikut membatalkan temuan rusaknya:
+                // keduanya berasal dari pemeriksaan rak yang sama.
+                $broken = $counted === null ? 0 : max(0, (int) ($damaged[$id] ?? 0));
+
+                if ($item->counted_quantity === $counted && $item->damaged_quantity === $broken) {
                     continue;
                 }
 
@@ -207,6 +214,7 @@ class StockOpnameController extends Controller implements HasMiddleware
 
                 $item->update([
                     'counted_quantity' => $counted,
+                    'damaged_quantity' => $broken,
                     'counted_at' => $counted === null ? null : now(),
                     'counted_by' => $counted === null ? null : auth()->id(),
                 ]);

@@ -4,6 +4,9 @@
     $checkStock = $mode === 'outbound';
     $withCondition = $mode === 'return';
     $withActual = $mode === 'adjustment';
+    // Kiriman pemasok bisa datang penyok; yang rusak dicatat terpisah sejak
+    // diterima supaya tautan ke surat jalannya terjaga untuk klaim.
+    $withDamaged = $mode === 'inbound';
 
     $catalog = $products->map(fn ($product) => [
         'id' => $product->id,
@@ -17,7 +20,7 @@
     $initial = collect(old('items', ($items ?? collect())->map(fn ($item) => [
         'product_id' => $item->product_id,
         'quantity' => $item->quantity,
-        'damaged' => $withCondition ? $item->damaged_quantity : 0,
+        'damaged' => $withCondition || $withDamaged ? $item->damaged_quantity : 0,
         'missing' => $withCondition ? $item->missingQuantity() : 0,
         'actual' => $withActual ? $item->actual_quantity : 0,
         'note' => $item->note,
@@ -41,6 +44,10 @@
                     &middot; <span class="font-medium text-emerald-600" x-text="goodQuantity"></span> layak jual
                     &middot; <span class="font-medium text-red-600" x-text="damagedQuantity"></span> rusak
                     &middot; <span class="font-medium text-amber-600" x-text="missingQuantity"></span> hilang
+                @endif
+                @if ($withDamaged)
+                    &middot; <span class="font-medium text-emerald-600" x-text="goodQuantity"></span> layak jual
+                    &middot; <span class="font-medium text-red-600" x-text="damagedQuantity"></span> rusak
                 @endif
             </p>
         </div>
@@ -129,6 +136,17 @@
                             </div>
                         @endif
 
+                        {{-- Kiriman yang datang rusak --}}
+                        @if ($withDamaged)
+                            <div class="w-full space-y-1.5 sm:w-28">
+                                <label class="block text-xs font-medium text-ink-500">Rusak</label>
+                                <input type="number" min="0" x-model.number="row.damaged" :name="`items[${index}][damaged_quantity]`"
+                                       class="block w-full rounded-xl border-ink-200 bg-white text-sm text-ink-950 shadow-soft transition focus:border-ink-950 focus:ring-1 focus:ring-ink-950"
+                                       :class="isOverChecked(row) && 'border-red-300 focus:border-red-500 focus:ring-red-500'">
+                                <p class="text-[11px] text-emerald-600" x-text="`${goodOf(row)} layak jual`"></p>
+                            </div>
+                        @endif
+
                         {{-- Hasil pemeriksaan barang retur --}}
                         @if ($withCondition)
                             <div class="w-full space-y-1.5 sm:w-28">
@@ -167,6 +185,15 @@
                             <p class="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-600">
                                 <x-icon name="warning" class="h-3.5 w-3.5 shrink-0" />
                                 Rusak + hilang melebihi jumlah pada baris ini.
+                            </p>
+                        </template>
+                    @endif
+
+                    @if ($withDamaged)
+                        <template x-if="isOverChecked(row)">
+                            <p class="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-600">
+                                <x-icon name="warning" class="h-3.5 w-3.5 shrink-0" />
+                                Jumlah rusak melebihi jumlah yang diterima pada baris ini.
                             </p>
                         </template>
                     @endif

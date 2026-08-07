@@ -232,6 +232,7 @@ class InboundController extends Controller implements HasMiddleware
             ->map(fn ($group, $productId) => [
                 'product_id' => (int) $productId,
                 'quantity' => (int) $group->sum('quantity'),
+                'damaged_quantity' => (int) $group->sum('damaged_quantity'),
                 'note' => $group->pluck('note')->filter()->implode(', ') ?: null,
             ])
             ->values()

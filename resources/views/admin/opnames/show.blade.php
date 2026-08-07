@@ -138,20 +138,45 @@
                                                         ])>{{ $item->differenceLabel() }}</span>
                                                     </div>
 
-                                                    <div class="flex-1 sm:w-28 sm:flex-none">
-                                                        {{-- Nilai awal ikut dikirim agar baris yang sudah
-                                                             dihitung rekan lain tidak tertimpa. --}}
-                                                        <input type="hidden" name="baseline[{{ $item->id }}]"
-                                                               value="{{ $item->counted_quantity }}">
+                                                    {{-- Nilai awal ikut dikirim agar baris yang sudah
+                                                         dihitung rekan lain tidak tertimpa. --}}
+                                                    <input type="hidden" name="baseline[{{ $item->id }}]"
+                                                           value="{{ $item->counted_quantity }}">
 
-                                                        <input type="number" min="0" max="999999" inputmode="numeric"
-                                                               name="counts[{{ $item->id }}]"
-                                                               value="{{ $item->counted_quantity }}"
-                                                               data-count-input="{{ $item->id }}"
-                                                               data-baseline="{{ $item->counted_quantity }}"
-                                                               placeholder="—"
-                                                               @disabled(! auth()->user()->can('opnames.update'))
-                                                               class="h-12 w-full rounded-xl border-ink-200 text-center text-base font-semibold tabular-nums shadow-sm focus:border-ink-950 focus:ring-ink-950 sm:h-11 sm:text-sm">
+                                                    <div class="flex flex-1 gap-2 sm:flex-none">
+                                                        <div class="flex-1 sm:w-24 sm:flex-none">
+                                                            <label class="mb-1 block text-center text-[10px] font-medium uppercase tracking-wider text-ink-400"
+                                                                   for="count-{{ $item->id }}">Bagus</label>
+                                                            <input id="count-{{ $item->id }}"
+                                                                   type="number" min="0" max="999999" inputmode="numeric"
+                                                                   name="counts[{{ $item->id }}]"
+                                                                   value="{{ $item->counted_quantity }}"
+                                                                   data-count-input="{{ $item->id }}"
+                                                                   data-baseline="{{ $item->counted_quantity }}"
+                                                                   placeholder="—"
+                                                                   @disabled(! auth()->user()->can('opnames.update'))
+                                                                   class="h-12 w-full rounded-xl border-ink-200 text-center text-base font-semibold tabular-nums shadow-sm focus:border-ink-950 focus:ring-ink-950 sm:h-11 sm:text-sm">
+                                                        </div>
+
+                                                        {{--
+                                                            Rusak dicatat terpisah, bukan dikurangkan diam-diam
+                                                            dari hitungan bagus. Selisih yang tidak dijelaskan
+                                                            terbaca sebagai barang hilang — padahal hilang perlu
+                                                            diselidiki, sedangkan rusak bisa diklaim ke pemasok.
+                                                        --}}
+                                                        <div class="flex-1 sm:w-24 sm:flex-none">
+                                                            <label class="mb-1 block text-center text-[10px] font-medium uppercase tracking-wider text-red-400"
+                                                                   for="damaged-{{ $item->id }}">Rusak</label>
+                                                            <input id="damaged-{{ $item->id }}"
+                                                                   type="number" min="0" max="999999" inputmode="numeric"
+                                                                   name="damaged[{{ $item->id }}]"
+                                                                   value="{{ $item->damaged_quantity ?: '' }}"
+                                                                   data-damaged-input="{{ $item->id }}"
+                                                                   data-baseline="{{ $item->damaged_quantity ?: '' }}"
+                                                                   placeholder="0"
+                                                                   @disabled(! auth()->user()->can('opnames.update'))
+                                                                   class="h-12 w-full rounded-xl border-ink-200 text-center text-base font-semibold tabular-nums text-red-700 shadow-sm placeholder:font-normal placeholder:text-ink-300 focus:border-red-500 focus:ring-red-500 sm:h-11 sm:text-sm">
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -199,6 +224,11 @@
 
                                             @if ($item->wasAppliedDifferently())
                                                 <p class="text-[11px] text-amber-600">dibukukan {{ $item->applied_difference }}</p>
+                                            @endif
+
+                                            {{-- Rusak disebut terpisah: ia bukan bagian dari selisih. --}}
+                                            @if ($item->hasDamaged())
+                                                <p class="text-[11px] font-medium text-red-600">{{ $item->damaged_quantity }} rusak</p>
                                             @endif
                                         </td>
                                         <td class="px-6 py-3.5">
