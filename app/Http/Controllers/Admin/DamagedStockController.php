@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\DamagedDisposal;
 use App\Models\Product;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Services\ApprovalService;
 use Illuminate\Http\RedirectResponse;
@@ -17,11 +18,15 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
- * Barang rusak: saldonya sendiri, beserta dokumen penanganannya.
+ * Barang rusak dan pengeluaran barang di luar penjualan.
  *
- * Unit rusak masuk dari penerimaan retur dan hanya bisa keluar lewat dokumen
- * di sini — dibuang, dikembalikan ke pemasok, atau diperbaiki sehingga layak
- * jual kembali. Dengan begitu tidak ada barang rusak yang menguap tanpa jejak.
+ * Dua saldo dilayani dokumen yang sama. Dari saldo rusak: dibuang, dikembalikan
+ * ke pemasok, atau diperbaiki sehingga layak jual kembali. Dari saldo layak
+ * jual: dibuang karena kedaluwarsa, dikembalikan ke pemasok, atau dipindahkan
+ * ke saldo rusak karena ternyata cacat.
+ *
+ * Dengan begitu tidak ada barang yang menguap tanpa jejak, dan tidak ada
+ * pengeluaran yang terpaksa dicatat sebagai penyesuaian angka.
  */
 class DamagedStockController extends Controller implements HasMiddleware
 {
@@ -70,20 +75,31 @@ class DamagedStockController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
+        $bucket = $this->bucketFrom($request);
+
         return view('admin.disposals.create', [
             'code' => DamagedDisposal::nextCode(),
-            'products' => Product::where('damaged_stock', '>', 0)->orderBy('name')->get(),
+            'bucket' => $bucket,
+            'products' => Product::where($this->columnFor($bucket), '>', 0)->orderBy('name')->get(),
             'suppliers' => Supplier::where('is_active', true)->orderBy('name')->get(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $bucket = $this->bucketFrom($request);
+        $column = $this->columnFor($bucket);
+
+        // Saldo asal tidak divalidasi: bucketFrom() hanya mengenal dua nilai dan
+        // jatuh ke saldo rusak untuk apa pun selainnya — persis satu-satunya
+        // perilaku yang dulu ada, sehingga form tanpa kolom itu tetap berlaku.
         $data = $request->validate([
             'date' => ['required', 'date'],
-            'action' => ['required', Rule::in(array_keys(DamagedDisposal::actions()))],
+            // Tindakannya harus masuk akal bagi saldo asal: memperbaiki barang
+            // yang memang layak jual tidak punya arti.
+            'action' => ['required', Rule::in(array_keys(DamagedDisposal::actionsFor($bucket)))],
             'supplier_id' => ['nullable', 'exists:suppliers,id'],
             'note' => ['nullable', 'string', 'max:1000'],
             'quantities' => ['array'],
@@ -98,22 +114,24 @@ class DamagedStockController extends Controller implements HasMiddleware
         }
 
         $products = Product::whereIn('id', $lines->keys())->get()->keyBy('id');
+        $label = $bucket === StockMovement::BUCKET_GOOD ? 'stok layak jual' : 'stok rusak';
 
-        // Tidak boleh menangani lebih banyak daripada yang tercatat rusak.
+        // Tidak boleh mengeluarkan lebih banyak daripada yang tercatat.
         foreach ($lines as $productId => $quantity) {
             $product = $products->get((int) $productId);
 
-            if (! $product || (int) $quantity > $product->damaged_stock) {
+            if (! $product || (int) $quantity > $product->{$column}) {
                 throw ValidationException::withMessages([
-                    'quantities' => "Jumlah {$product?->name} melebihi stok rusak yang tercatat ({$product?->damaged_stock}).",
+                    'quantities' => "Jumlah {$product?->name} melebihi {$label} yang tercatat ({$product?->{$column}}).",
                 ]);
             }
         }
 
-        $disposal = DB::transaction(function () use ($data, $lines) {
+        $disposal = DB::transaction(function () use ($data, $lines, $bucket) {
             $disposal = DamagedDisposal::create([
                 'code' => DamagedDisposal::nextCode(),
                 'date' => $data['date'],
+                'bucket' => $bucket,
                 'action' => $data['action'],
                 'supplier_id' => $data['action'] === DamagedDisposal::ACTION_RETURN ? ($data['supplier_id'] ?? null) : null,
                 'note' => $data['note'] ?? null,
@@ -158,7 +176,7 @@ class DamagedStockController extends Controller implements HasMiddleware
         }
 
         return back()->with('success', $selfApprove
-            ? "Dokumen {$disposal->code} diproses. Stok rusak sudah berkurang."
+            ? "Dokumen {$disposal->code} diproses. {$disposal->postedSummary()}"
             : "Dokumen {$disposal->code} diajukan dan menunggu persetujuan.");
     }
 
@@ -172,7 +190,23 @@ class DamagedStockController extends Controller implements HasMiddleware
             return back()->with('error', collect($exception->errors())->flatten()->implode(' '));
         }
 
-        return back()->with('success', "Dokumen {$disposal->code} diproses. Stok rusak sudah berkurang.");
+        return back()->with('success', "Dokumen {$disposal->code} diproses. {$disposal->postedSummary()}");
+    }
+
+    /**
+     * Saldo asal yang sedang dikerjakan; bawaannya saldo rusak, sama seperti
+     * satu-satunya perilaku yang dulu ada.
+     */
+    protected function bucketFrom(Request $request): string
+    {
+        return $request->input('bucket') === StockMovement::BUCKET_GOOD
+            ? StockMovement::BUCKET_GOOD
+            : StockMovement::BUCKET_DAMAGED;
+    }
+
+    protected function columnFor(string $bucket): string
+    {
+        return $bucket === StockMovement::BUCKET_GOOD ? 'stock' : 'damaged_stock';
     }
 
     public function withdraw(DamagedDisposal $disposal): RedirectResponse

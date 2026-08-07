@@ -68,6 +68,14 @@
 
                 <dl class="space-y-3 text-sm">
                     <div class="flex items-center justify-between gap-3">
+                        <dt class="text-ink-500">Diambil dari</dt>
+                        <dd class="text-right">
+                            <x-ui.badge :variant="$disposal->isFromDamaged() ? 'danger' : 'outline'">
+                                {{ $disposal->bucketLabel() }}
+                            </x-ui.badge>
+                        </dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
                         <dt class="text-ink-500">Tindakan</dt>
                         <dd class="text-right font-medium text-ink-950">{{ $disposal->actionLabel() }}</dd>
                     </div>
@@ -83,10 +91,18 @@
                     </div>
                 </dl>
 
-                @if ($disposal->returnsToSellableStock())
+                {{-- Apa yang terjadi pada saldo, dikatakan sebelum diproses.
+                     Pemindahan antar saldo mudah disangka pengeluaran, padahal
+                     barangnya sama sekali tidak meninggalkan gudang. --}}
+                @if (! $disposal->leavesTheWarehouse())
                     <p class="flex items-start gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-[11px] leading-relaxed text-emerald-800 ring-1 ring-inset ring-emerald-200">
                         <x-icon name="info" class="mt-px h-3.5 w-3.5 shrink-0" />
-                        <span>Unit ini keluar dari saldo rusak dan masuk kembali ke saldo layak jual saat dokumen diproses.</span>
+                        <span>{{ $disposal->postedSummary() }} Barangnya tetap di gudang.</span>
+                    </p>
+                @else
+                    <p class="flex items-start gap-2 rounded-xl bg-ink-50 px-3 py-2.5 text-[11px] leading-relaxed text-ink-600 ring-1 ring-inset ring-ink-200">
+                        <x-icon name="info" class="mt-px h-3.5 w-3.5 shrink-0" />
+                        <span>{{ $disposal->postedSummary() }} Unitnya keluar dari gudang untuk selamanya.</span>
                     </p>
                 @endif
 

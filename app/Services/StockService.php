@@ -177,10 +177,12 @@ class StockService
     }
 
     /**
-     * Selesaikan penanganan barang rusak.
+     * Selesaikan dokumen pengeluaran barang.
      *
-     * Unit keluar dari saldo rusak; khusus yang diperbaiki, unit yang sama
-     * langsung masuk kembali ke saldo layak jual dalam transaksi yang sama.
+     * Unit keluar dari saldo asal yang disebut dokumennya. Bila tindakannya
+     * hanya memindahkan barang antar saldo — diperbaiki atau ditandai rusak —
+     * unit yang sama langsung masuk ke saldo tujuan dalam transaksi yang sama,
+     * sehingga tidak pernah ada saat di mana barangnya seolah lenyap.
      */
     public function postDisposal(DamagedDisposal $disposal): void
     {
@@ -197,18 +199,24 @@ class StockService
         }
 
         DB::transaction(function () use ($disposal) {
-            foreach ($disposal->items as $item) {
-                $this->move(
-                    $item->product_id, 'out', $item->quantity, $disposal,
-                    "Barang rusak {$disposal->code} — {$disposal->actionLabel()}",
-                    StockMovement::BUCKET_DAMAGED,
-                );
+            $source = $disposal->sourceBucket();
+            $target = $disposal->targetBucket();
 
-                if ($disposal->returnsToSellableStock()) {
-                    $this->move(
-                        $item->product_id, 'in', $item->quantity, $disposal,
-                        "Perbaikan barang rusak {$disposal->code}",
-                    );
+            $leaving = $disposal->isFromDamaged()
+                ? "Barang rusak {$disposal->code} — {$disposal->actionLabel()}"
+                : "Pengeluaran barang {$disposal->code} — {$disposal->actionLabel()}";
+
+            $arriving = match ($target) {
+                StockMovement::BUCKET_GOOD => "Perbaikan barang rusak {$disposal->code}",
+                StockMovement::BUCKET_DAMAGED => "Ditandai rusak {$disposal->code}",
+                default => null,
+            };
+
+            foreach ($disposal->items as $item) {
+                $this->move($item->product_id, 'out', $item->quantity, $disposal, $leaving, $source);
+
+                if ($target !== null) {
+                    $this->move($item->product_id, 'in', $item->quantity, $disposal, $arriving, $target);
                 }
             }
 

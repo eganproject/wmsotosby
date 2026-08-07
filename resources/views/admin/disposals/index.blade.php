@@ -5,10 +5,19 @@
     yang rusak" dan "sudah diapakan" — jadi tidak dipisah ke dua menu.
 --}}
 <x-app-layout title="Barang Rusak">
-    <x-ui.page-header title="Barang Rusak" icon="trash"
-                      subtitle="Saldo barang rusak beserta dokumen penanganannya.">
+    <x-ui.page-header title="Barang Rusak & Pengeluaran" icon="trash"
+                      subtitle="Saldo barang rusak, beserta dokumen setiap barang yang keluar di luar penjualan.">
         <x-slot name="actions">
             @can('disposals.create')
+                {{--
+                    Saldo asalnya dipilih di sini, bukan di dalam form: dengan
+                    begitu daftar barang dan pilihan tindakannya sudah tepat
+                    sejak halaman dibuka.
+                --}}
+                <x-ui.button :href="route('admin.disposals.create', ['bucket' => 'good'])"
+                             variant="secondary" icon="logout">
+                    Keluarkan Barang Layak Jual
+                </x-ui.button>
                 <x-ui.button :href="route('admin.disposals.create')" icon="plus">Tangani Barang Rusak</x-ui.button>
             @endcan
         </x-slot>
@@ -89,10 +98,11 @@
         </x-ui.card>
 
         {{-- Dokumen --}}
-        <x-ui.card title="Riwayat Penanganan" subtitle="Dibuang, dikembalikan ke pemasok, atau diperbaiki." padding="p-0">
+        <x-ui.card title="Riwayat Pengeluaran"
+                   subtitle="Dibuang, dikembalikan ke pemasok, diperbaiki, atau dipindah antar saldo." padding="p-0">
             @if ($disposals->isEmpty())
-                <x-ui.empty-state icon="document" title="Belum ada penanganan"
-                                  description="Buat dokumen untuk mengeluarkan barang rusak dari gudang." />
+                <x-ui.empty-state icon="document" title="Belum ada pengeluaran"
+                                  description="Buat dokumen untuk mengeluarkan barang dari gudang di luar penjualan." />
             @else
                 <ul class="divide-y divide-ink-50">
                     @foreach ($disposals as $disposal)
@@ -100,7 +110,13 @@
                             <a href="{{ route('admin.disposals.show', $disposal) }}"
                                class="flex items-center gap-3 px-5 py-3.5 transition hover:bg-ink-50/60">
                                 <div class="min-w-0 flex-1">
-                                    <p class="font-mono text-sm font-medium text-ink-950">{{ $disposal->code }}</p>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="font-mono text-sm font-medium text-ink-950">{{ $disposal->code }}</p>
+                                        {{-- Saldo asalnya disebut: dokumen yang sama kini melayani keduanya. --}}
+                                        <x-ui.badge :variant="$disposal->isFromDamaged() ? 'danger' : 'outline'">
+                                            {{ $disposal->bucketLabel() }}
+                                        </x-ui.badge>
+                                    </div>
                                     <p class="truncate text-[11px] text-ink-400">
                                         {{ $disposal->date->translatedFormat('d M Y') }}
                                         &middot; {{ $disposal->actionLabel() }}
