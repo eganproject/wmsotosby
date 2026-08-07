@@ -53,6 +53,23 @@ class ApprovalService
             ]);
         }
 
+        /*
+            Hanya dokumen yang benar-benar diajukan yang bisa disetujui.
+
+            Tanpa penjagaan ini, satu permintaan langsung ke alamat persetujuan
+            memposting dokumen yang masih draft: stoknya bergerak sementara
+            kolom "diajukan oleh" tetap kosong, dan jejak auditnya berbohong.
+            Yang ditolak pun bisa dilompati perbaikannya.
+
+            Menyetujui langsung tanpa antre tetap bisa — lewat submitAndApprove,
+            yang mencatat pengajunya lebih dulu.
+        */
+        if (! $document->isPending()) {
+            throw ValidationException::withMessages([
+                'status' => 'Hanya dokumen yang sedang diajukan dapat disetujui.',
+            ]);
+        }
+
         $this->guardReady($document);
 
         DB::transaction(function () use ($document) {
@@ -83,12 +100,25 @@ class ApprovalService
     {
         $this->guardReady($document);
 
-        $document->forceFill([
-            'submitted_at' => now(),
-            'submitted_by' => auth()->id(),
-        ])->save();
+        /*
+            Dokumen benar-benar melewati status diajukan, bukan melompatinya —
+            itulah yang membuat penjagaan pada approve() bisa berlaku untuk
+            semua jalur sekaligus.
 
-        $this->approve($document);
+            Dibungkus transaksi supaya kegagalan di tengah, misalnya stok yang
+            keburu habis, mengembalikan dokumen ke draft alih-alih
+            meninggalkannya menggantung sebagai pengajuan yang tak seorang pun
+            merasa membuatnya.
+        */
+        DB::transaction(function () use ($document) {
+            $document->forceFill([
+                'status' => $document::STATUS_PENDING,
+                'submitted_at' => now(),
+                'submitted_by' => auth()->id(),
+            ])->save();
+
+            $this->approve($document);
+        });
     }
 
     /**

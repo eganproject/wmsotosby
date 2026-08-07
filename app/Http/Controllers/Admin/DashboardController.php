@@ -8,10 +8,24 @@ use App\Models\Outbound;
 use App\Models\Product;
 use App\Models\ShipmentOrder;
 use App\Models\StockMovement;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\View\View;
 
-class DashboardController extends Controller
+class DashboardController extends Controller implements HasMiddleware
 {
+    /**
+     * Izinnya sudah lama ada di matriks hak akses tetapi tidak pernah benar-
+     * benar diperiksa, sehingga siapa pun yang bisa masuk melihat saldo stok,
+     * barang menipis, dan mutasi terakhir — angka yang justru paling sensitif.
+     */
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('can:dashboard.view'),
+        ];
+    }
+
     public function __invoke(): View
     {
         $stats = [

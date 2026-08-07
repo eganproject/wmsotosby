@@ -57,6 +57,7 @@ class QueryBudgetTest extends TestCase
             'barang rusak' => ['admin.disposals.index', 17],
             'import resi' => ['admin.imports.index', 16],
             'status resi' => ['admin.imports.status', 14],
+            'per ekspedisi' => ['admin.imports.couriers', 16],
             'persetujuan' => ['admin.approvals.index', 22],
             'pengguna' => ['admin.users.index', 14],
             'role' => ['admin.roles.index', 14],
@@ -74,6 +75,36 @@ class QueryBudgetTest extends TestCase
             $queries,
             "Halaman {$route} menjalankan {$queries} query, melebihi anggaran {$budget}.",
         );
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function pagesWithRows(): array
+    {
+        return [
+            'barang & stok' => ['admin.products.index', 'SKU-A1'],
+            'barang masuk' => ['admin.inbounds.index', 'IN-A1'],
+            'barang keluar' => ['admin.outbounds.index', 'OUT-A1'],
+            'penerimaan retur' => ['admin.returns.index', 'RET-A1'],
+            'penyesuaian stok' => ['admin.adjustments.index', 'ADJ-A1'],
+            'stok opname' => ['admin.opnames.index', 'OPN-A1'],
+            'import resi' => ['admin.imports.index', 'TRK-A1'],
+            'status resi' => ['admin.imports.status', 'TRK-A1'],
+        ];
+    }
+
+    /**
+     * Anggaran query hanya berarti bila halamannya benar-benar berisi.
+     *
+     * Halaman kosong selalu hemat query, jadi tanpa penjagaan ini satu saringan
+     * bawaan yang keliru bisa menyembunyikan seluruh baris sekaligus membuat
+     * seluruh anggaran di atas lulus tanpa mengukur apa pun.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('pagesWithRows')]
+    public function test_the_budget_is_measured_against_a_page_that_has_rows(string $route, string $needle): void
+    {
+        $this->actingAs($this->admin)->get(route($route))->assertOk()->assertSee($needle);
     }
 
     public function test_list_pages_do_not_grow_with_the_number_of_rows(): void

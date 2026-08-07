@@ -254,8 +254,18 @@
                                         mengembalikannya. Yang dicabut hanya kemampuan
                                         mencentangnya.
                                     --}}
+                                    {{--
+                                        Kedua sebab digabung dalam satu ikatan.
+
+                                        Atribut disabled dari Blade sempat
+                                        dipasang berdampingan dengan ikatan
+                                        Alpine pada atribut yang sama — dan
+                                        ikatannya menang, sehingga kotak centang
+                                        paket batal hidup kembali begitu halaman
+                                        selesai dimuat.
+                                    --}}
                                     <input type="checkbox" name="ids[]" value="{{ $outbound->id }}" x-model.number="selected"
-                                           @disabled($cancelled) :disabled="isSent({{ $outbound->id }})"
+                                           :disabled="isSent({{ $outbound->id }}) || {{ $cancelled ? 'true' : 'false' }}"
                                            class="mt-1 h-4 w-4 shrink-0 rounded border-ink-300 text-ink-950 focus:ring-ink-950 disabled:opacity-40">
 
                                     <div class="min-w-0 flex-1">

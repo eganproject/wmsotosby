@@ -211,6 +211,15 @@ class ProductController extends Controller implements HasMiddleware
             return back()->with('error', 'Barang sudah memiliki riwayat pergerakan stok dan tidak dapat dihapus. Nonaktifkan saja bila tidak dipakai lagi.');
         }
 
+        // Dokumen draft belum menghasilkan mutasi apa pun, jadi pemeriksaan di
+        // atas melewatkannya — sementara kunci asing pada baris dokumen memakai
+        // RESTRICT dan akan menolak penghapusannya sebagai galat basis data.
+        if ($blocking = $product->blockingDocuments()) {
+            return back()->with('error', 'Barang masih tercantum pada dokumen '
+                .implode(', ', $blocking)
+                .'. Hapus dulu barisnya dari dokumen tersebut, atau nonaktifkan barangnya bila tidak dipakai lagi.');
+        }
+
         $product->delete();
 
         return redirect()

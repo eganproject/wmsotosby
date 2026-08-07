@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Product extends Model
 {
@@ -64,6 +65,34 @@ class Product extends Model
     public function scopeLowStock(Builder $query): Builder
     {
         return $query->whereColumn('stock', '<=', 'min_stock');
+    }
+
+    /**
+     * Jenis dokumen yang masih memakai barang ini.
+     *
+     * Baris dokumen memakai kunci asing RESTRICT, sedangkan penghapusan hanya
+     * memeriksa mutasi stok — padahal dokumen draft belum menghasilkan mutasi
+     * apa pun. Tanpa pemeriksaan ini, menghapus barang yang masih tercantum di
+     * draft menabrak kunci asing dan berakhir sebagai galat basis data, bukan
+     * sebagai pesan yang bisa ditindaklanjuti.
+     *
+     * @return array<int, string>
+     */
+    public function blockingDocuments(): array
+    {
+        $tables = [
+            'inbound_items' => 'barang masuk',
+            'outbound_items' => 'barang keluar',
+            'return_receipt_items' => 'penerimaan retur',
+            'stock_adjustment_items' => 'penyesuaian stok',
+            'stock_opname_items' => 'stok opname',
+            'damaged_disposal_items' => 'barang rusak',
+        ];
+
+        return collect($tables)
+            ->filter(fn (string $label, string $table) => DB::table($table)->where('product_id', $this->id)->exists())
+            ->values()
+            ->all();
     }
 
     /**
