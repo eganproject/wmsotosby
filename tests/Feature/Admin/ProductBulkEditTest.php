@@ -272,12 +272,55 @@ class ProductBulkEditTest extends TestCase
 
         $this->actingAs($this->admin)->get(route('admin.products.index'))
             ->assertOk()
-            ->assertSee('name="ids[]"', false)
+            ->assertSee('productBulkEdit(', false)
             ->assertSee('value="'.$product->id.'"', false)
             ->assertSee(route('admin.products.bulk.min-stock'))
             ->assertSee('Batas menipis')
             // Batasan yang paling penting disebut di layar, bukan hanya di kode.
             ->assertSee('stok tidak tersentuh');
+    }
+
+    /**
+     * Barang terpilih dikirim dari daftar pilihan, bukan dari kotak centang.
+     *
+     * Sebagian pilihan bisa berada di halaman yang sedang tidak terlihat, dan
+     * kotak centangnya pun tidak ada di dokumen — kalau yang dikirim kotak
+     * centang, pilihan dari halaman lain hilang diam-diam saat disimpan.
+     */
+    public function test_the_selection_is_submitted_from_the_remembered_list(): void
+    {
+        $this->makeProduct('FLT-1', minStock: 1);
+
+        $html = $this->actingAs($this->admin)->get(route('admin.products.index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('<template x-for="id in selected"', $html);
+        $this->assertStringContainsString('name="ids[]" :value="id"', $html);
+        $this->assertStringNotContainsString('type="checkbox" name="ids[]"', $html);
+    }
+
+    /**
+     * Pilihan hanya berlaku untuk saringan yang sama persis, dan penandanya
+     * tidak boleh ikut berubah hanya karena berpindah halaman.
+     */
+    public function test_the_selection_key_ignores_the_page_number(): void
+    {
+        foreach (range(1, 12) as $number) {
+            $this->makeProduct('FLT-'.$number, minStock: 1, category: 'Filter');
+        }
+
+        $key = fn (array $query) => $this->keyFrom(
+            $this->actingAs($this->admin)->get(route('admin.products.index', $query))->getContent(),
+        );
+
+        $first = $key(['category' => 'Filter']);
+        $second = $key(['category' => 'Filter', 'page' => 2]);
+        $other = $key(['category' => 'Filter', 'stock' => 'low']);
+
+        $this->assertNotSame('', $first);
+        $this->assertSame($first, $second, 'Berpindah halaman bukan berganti saringan.');
+        $this->assertNotSame($first, $other, 'Saringan yang berbeda harus melupakan pilihan sebelumnya.');
     }
 
     /** Yang tidak boleh mengubah tidak diberi kotak centang sama sekali. */
@@ -292,7 +335,14 @@ class ProductBulkEditTest extends TestCase
 
         $this->actingAs($viewer)->get(route('admin.products.index'))
             ->assertOk()
-            ->assertDontSee('name="ids[]"', false);
+            ->assertDontSee('type="checkbox"', false);
+    }
+
+    protected function keyFrom(string $html): string
+    {
+        preg_match("/key: '([^']*)'/", $html, $matches);
+
+        return $matches[1] ?? '';
     }
 
     /* --------------------------------------------------- helpers --------- */

@@ -94,24 +94,25 @@
             rancu karenanya. Stok sendiri hanya boleh bergerak lewat dokumen.
         --}}
         <form method="POST" action="{{ route('admin.products.bulk.min-stock') }}"
-              x-data="{
+              x-data="productBulkEdit({
                   ids: @js($products->pluck('id')->all()),
-                  selected: [],
-                  allFiltered: false,
                   total: {{ $products->total() }},
-
-                  get pageChosen() { return this.ids.length > 0 && this.selected.length === this.ids.length },
-                  get count() { return this.allFiltered ? this.total : this.selected.length },
-
-                  togglePage() {
-                      this.allFiltered = false;
-                      this.selected = this.pageChosen ? [] : [...this.ids];
-                  },
-                  chooseEverything() { this.selected = [...this.ids]; this.allFiltered = true },
-                  clearAll() { this.selected = []; this.allFiltered = false },
-              }">
+                  key: @js(collect(request()->query())->except('page')->sortKeys()->toJson()),
+              })"
+              {{-- Pilihan yang sudah dipakai tidak perlu diingat lagi. --}}
+              x-on:submit="forget()">
             @csrf
             @method('PATCH')
+
+            {{--
+                Barang terpilih dikirim dari daftar pilihan, bukan dari kotak
+                centang di layar: sebagian di antaranya bisa berada di halaman
+                yang sedang tidak terlihat, dan kotak centangnya pun tidak ada
+                di dokumen ini.
+            --}}
+            <template x-for="id in selected" :key="id">
+                <input type="hidden" name="ids[]" :value="id">
+            </template>
 
             {{--
                 Saringan yang sedang aktif ikut terkirim: ia menentukan barang
@@ -151,7 +152,14 @@
                             tetapi sebagai tindakan tersendiri yang jumlahnya
                             disebut, bukan sesuatu yang terjadi diam-diam.
                         --}}
-                        <p class="mt-0.5 text-xs text-white/60">
+                        <p class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-white/60">
+                            {{-- Yang terpilih di halaman lain tetap disebut; kalau
+                                 tidak, jumlahnya terbaca lebih besar dari yang
+                                 terlihat tanpa penjelasan. --}}
+                            <template x-if="! allFiltered && offPage > 0">
+                                <span x-text="`${offPage} di antaranya dari halaman lain`"></span>
+                            </template>
+
                             <template x-if="! allFiltered && pageChosen && total > ids.length">
                                 <button type="button" x-on:click="chooseEverything()"
                                         class="font-medium text-white underline underline-offset-4 hover:text-white/80"
@@ -165,9 +173,7 @@
                                 </button>
                             </template>
 
-                            <template x-if="! allFiltered && ! (pageChosen && total > ids.length)">
-                                <span>Hanya batas menipis yang diubah — stok tidak tersentuh.</span>
-                            </template>
+                            <span>Hanya batas menipis yang diubah — stok tidak tersentuh.</span>
                         </p>
                     </div>
 
@@ -220,7 +226,7 @@
                                 :class="selected.includes({{ $product->id }}) && 'bg-ink-50/70'">
                                 @can('products.update')
                                     <td class="w-12 py-4 pl-6 pr-0 align-top">
-                                        <input type="checkbox" name="ids[]" value="{{ $product->id }}"
+                                        <input type="checkbox" value="{{ $product->id }}"
                                                x-model.number="selected" x-on:change="allFiltered = false"
                                                class="mt-0.5 h-4 w-4 rounded border-ink-300 text-ink-950 focus:ring-ink-950">
                                         <span class="sr-only">Pilih {{ $product->name }}</span>
@@ -276,7 +282,7 @@
                              :class="selected.includes({{ $product->id }}) && 'bg-ink-50/70'">
                             @can('products.update')
                                 <label class="mt-1 shrink-0">
-                                    <input type="checkbox" name="ids[]" value="{{ $product->id }}"
+                                    <input type="checkbox" value="{{ $product->id }}"
                                            x-model.number="selected" x-on:change="allFiltered = false"
                                            class="h-4 w-4 rounded border-ink-300 text-ink-950 focus:ring-ink-950">
                                     <span class="sr-only">Pilih {{ $product->name }}</span>

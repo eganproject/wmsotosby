@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductImportController;
 use App\Http\Controllers\Admin\ReturnMarketplaceController;
 use App\Http\Controllers\Admin\ReturnReceiptController;
+use App\Http\Controllers\Admin\RestockReportController;
 use App\Http\Controllers\Admin\ReturnScanController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\ShipmentImportController;
@@ -48,6 +49,8 @@ Route::middleware('auth')
 
         Route::get('reports/stock/export', [StockReportController::class, 'export'])->name('reports.stock.export');
         Route::get('reports/stock', [StockReportController::class, 'index'])->name('reports.stock');
+        Route::get('reports/restock/export', [RestockReportController::class, 'export'])->name('reports.restock.export');
+        Route::get('reports/restock', [RestockReportController::class, 'index'])->name('reports.restock');
 
         Route::post('inbounds/{inbound}/submit', [InboundController::class, 'submit'])->name('inbounds.submit');
         Route::post('inbounds/{inbound}/approve', [InboundController::class, 'approve'])->name('inbounds.approve');
