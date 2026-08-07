@@ -267,24 +267,66 @@ class DateFilterTest extends TestCase
     /* --------------------------------------------------- kasus khusus ---- */
 
     /**
-     * Eksport Ginee tidak selalu menyertakan kolom tanggal. Pesanan tanpa
-     * tanggal akan lenyap seluruhnya begitu saringan dinyalakan — jawaban yang
-     * salah tanpa satu pun petunjuk — jadi yang kosong memakai waktu berkasnya
-     * masuk ke sistem.
+     * Resi disaring menurut hari berkasnya diunggah, bukan hari pesanannya
+     * dibuat di marketplace.
+     *
+     * Keduanya sering berbeda hari — berkas Ginee lazim diunduh dan diunggah
+     * sehari setelah pesanannya masuk. Bagi gudang "hari ini" berarti batch
+     * yang barusan diunggah, dan menyaring menurut tanggal pesanan justru
+     * menyembunyikan persis pekerjaan yang sedang menunggu.
      */
-    public function test_a_waybill_without_an_order_date_falls_back_to_when_it_arrived(): void
+    public function test_waybills_are_filtered_by_the_upload_date_not_the_order_date(): void
     {
-        $this->travelTo(Carbon::parse('2026-08-05 10:00'));
-        $order = $this->makeOrder(null, 'TANPATANGGAL');
-        $this->travelBack();
+        $order = $this->makeOrder(
+            uploadedAt: Carbon::parse('2026-08-05 13:00'),
+            tracking: 'SPXID111',
+            orderedAt: Carbon::parse('2026-08-04 09:30'),
+        );
 
-        $this->assertSame(1, ShipmentOrder::dateBetween(new DateRange('2026-08-01', '2026-08-31'))->count());
-        $this->assertSame(0, ShipmentOrder::dateBetween(new DateRange('2026-07-01', '2026-07-31'))->count());
+        $this->assertSame(1, ShipmentOrder::dateBetween(new DateRange('2026-08-05', '2026-08-05'))->count());
+        $this->assertSame(0, ShipmentOrder::dateBetween(new DateRange('2026-08-04', '2026-08-04'))->count());
 
         $this->actingAs($this->admin)
-            ->get(route('admin.imports.status', ['from' => '2026-08-01', 'to' => '2026-08-31']))
+            ->get(route('admin.imports.status', ['from' => '2026-08-05', 'to' => '2026-08-05']))
             ->assertOk()
             ->assertSee($order->tracking_number);
+
+        // Hari pesanannya tidak lagi menemukan apa pun.
+        $this->actingAs($this->admin)
+            ->get(route('admin.imports.status', ['from' => '2026-08-04', 'to' => '2026-08-04']))
+            ->assertOk()
+            ->assertDontSee($order->tracking_number);
+    }
+
+    /**
+     * Mengunggah ulang berkas yang sama tidak menggeser tanggalnya: resinya
+     * sudah pernah masuk, dan pengunggahan kedua bukan pekerjaan baru.
+     */
+    public function test_a_re_import_keeps_the_original_upload_date(): void
+    {
+        $this->travelTo(Carbon::parse('2026-08-05 13:00'));
+        $this->uploadCsv('SPXID111');
+        $this->travelBack();
+
+        $this->travelTo(Carbon::parse('2026-08-09 08:00'));
+        $this->uploadCsv('SPXID111');
+        $this->travelBack();
+
+        $this->assertSame(1, ShipmentOrder::count(), 'Resi yang sama diperbarui, bukan digandakan.');
+        $this->assertSame(1, ShipmentOrder::dateBetween(new DateRange('2026-08-05', '2026-08-05'))->count());
+        $this->assertSame(0, ShipmentOrder::dateBetween(new DateRange('2026-08-09', '2026-08-09'))->count());
+    }
+
+    protected function uploadCsv(string $tracking): void
+    {
+        $csv = "Nomor Resi,SKU,Jumlah\n{$tracking},{$this->product->sku},1";
+
+        $path = tempnam(sys_get_temp_dir(), 'ginee').'.csv';
+        file_put_contents($path, $csv);
+
+        $this->actingAs($this->admin)->post(route('admin.imports.store'), [
+            'file' => new \Illuminate\Http\UploadedFile($path, 'ginee.csv', 'text/csv', null, true),
+        ])->assertSessionHas('success');
     }
 
     /**
@@ -386,8 +428,17 @@ class DateFilterTest extends TestCase
         };
     }
 
-    protected function makeOrder(?Carbon $date, string $tracking): ShipmentOrder
+    /**
+     * Yang menentukan saringan adalah kapan resinya masuk ke sistem, jadi
+     * waktunya digeser saat barisnya dibuat — bukan sekadar diisikan ke kolom
+     * tanggal pesanan.
+     */
+    protected function makeOrder(?Carbon $uploadedAt, string $tracking, ?Carbon $orderedAt = null): ShipmentOrder
     {
+        if ($uploadedAt) {
+            $this->travelTo($uploadedAt);
+        }
+
         $import = ShipmentImport::create([
             'filename' => 'ginee.csv', 'source' => 'ginee', 'row_count' => 1,
             'detected_columns' => ['tracking_number', 'sku'],
@@ -398,7 +449,7 @@ class DateFilterTest extends TestCase
             'order_number' => 'INV-'.$tracking,
             'marketplace' => 'Shopee',
             'courier' => 'SPX',
-            'order_date' => $date,
+            'order_date' => $orderedAt ?? $uploadedAt,
         ]);
 
         $order->items()->create([
@@ -407,6 +458,10 @@ class DateFilterTest extends TestCase
             'product_name' => $this->product->name,
             'quantity' => 1,
         ]);
+
+        if ($uploadedAt) {
+            $this->travelBack();
+        }
 
         return $order;
     }

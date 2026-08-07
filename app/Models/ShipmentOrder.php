@@ -374,17 +374,24 @@ class ShipmentOrder extends Model
     }
 
     /**
-     * Tanggal yang mewakili sebuah pesanan.
+     * Tanggal yang dipakai menyaring dan mengurutkan resi: saat ia masuk ke
+     * sistem, bukan saat pesanannya dibuat di marketplace.
      *
-     * Eksport Ginee tidak selalu menyertakan kolom tanggal, dan pesanan tanpa
-     * tanggal akan lenyap seluruhnya begitu saringan dinyalakan — jawaban yang
-     * salah tanpa satu pun petunjuk. Yang kosong karena itu memakai waktu
-     * berkasnya masuk ke sistem.
+     * Keduanya sering berbeda hari — berkas Ginee lazim diunduh dan diunggah
+     * sehari setelah pesanannya masuk. Bagi gudang yang berarti "hari ini"
+     * adalah batch yang barusan diunggah, dan menyaring menurut tanggal
+     * pesanan justru menyembunyikan persis pekerjaan yang sedang menunggu.
+     *
+     * Tanggal pesanan tetap tersimpan dan tetap ditampilkan di daftarnya; ia
+     * hanya tidak lagi menjadi dasar saringan.
+     *
+     * Mengunggah ulang berkas yang sama tidak menggeser tanggal ini: resinya
+     * sudah pernah masuk, dan pengunggahan kedua bukan pekerjaan baru.
      */
-    protected const EFFECTIVE_DATE = 'DATE(COALESCE(order_date, shipment_orders.created_at))';
+    protected const EFFECTIVE_DATE = 'DATE(shipment_orders.created_at)';
 
     /**
-     * Disaring menurut tanggal pesanan.
+     * Disaring menurut tanggal unggah.
      */
     public function scopeDateBetween(Builder $query, \App\Support\DateRange $range): Builder
     {
@@ -397,16 +404,16 @@ class ShipmentOrder extends Model
 
     /**
      * Terbaru lebih dulu, menurut tanggal yang sama dengan yang dipakai
-     * saringannya.
+     * saringannya — sampai ke jamnya, supaya dua unggahan pada hari yang sama
+     * tetap berurutan.
      *
-     * Sebelumnya daftar resi diurutkan menurut nomor barisnya, yang berarti
-     * urutan masuknya berkas import — bukan urutan pesanannya. Menyaring
+     * Sebelumnya daftar resi diurutkan menurut nomor barisnya. Menyaring
      * menurut satu tanggal lalu mengurutkan menurut hal lain membuat halaman
      * pertama tidak berisi yang paling baru.
      */
     public function scopeLatestFirst(Builder $query): Builder
     {
-        return $query->orderByRaw(self::EFFECTIVE_DATE.' DESC')->orderByDesc('shipment_orders.id');
+        return $query->orderByDesc('shipment_orders.created_at')->orderByDesc('shipment_orders.id');
     }
 
     public function scopeSearch(Builder $query, ?string $term): Builder

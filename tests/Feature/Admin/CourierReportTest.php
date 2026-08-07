@@ -249,8 +249,14 @@ class CourierReportTest extends TestCase
         return $this->couriers($query)->firstOrFail(fn ($row) => $row->courier === $courier);
     }
 
+    /**
+     * Resi disaring menurut kapan berkasnya diunggah, jadi waktunya digeser
+     * saat barisnya dibuat.
+     */
     protected function makeOrder(?string $courier, string $tracking, ?Carbon $date = null): ShipmentOrder
     {
+        $this->travelTo($date ?? Carbon::today());
+
         $import = ShipmentImport::create([
             'filename' => 'ginee.csv', 'source' => 'ginee', 'row_count' => 1,
             'detected_columns' => ['tracking_number', 'sku'],
@@ -270,6 +276,8 @@ class CourierReportTest extends TestCase
             'product_name' => $this->product->name,
             'quantity' => 2,
         ]);
+
+        $this->travelBack();
 
         return $order;
     }

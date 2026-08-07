@@ -174,8 +174,11 @@ class SummaryCardTest extends TestCase
         return $product;
     }
 
+    /** Saringannya memakai tanggal unggah, jadi waktunya digeser saat dibuat. */
     protected function makeOrder(string $tracking, Carbon $date, string $courier = 'SPX'): ShipmentOrder
     {
+        $this->travelTo($date);
+
         $import = ShipmentImport::create([
             'filename' => 'ginee-'.$tracking.'.csv', 'source' => 'ginee', 'row_count' => 1,
             'detected_columns' => ['tracking_number', 'sku'],
@@ -190,6 +193,8 @@ class SummaryCardTest extends TestCase
         ]);
 
         $order->items()->create(['sku' => 'FLT-X', 'product_name' => 'Filter', 'quantity' => 2]);
+
+        $this->travelBack();
 
         return $order;
     }

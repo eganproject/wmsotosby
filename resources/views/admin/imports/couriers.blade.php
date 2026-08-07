@@ -55,7 +55,7 @@
         </div>
 
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <x-ui.date-filter label="Tanggal pesanan" />
+            <x-ui.date-filter label="Tanggal unggah berkas" />
 
             <div class="flex items-center gap-2">
                 <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
