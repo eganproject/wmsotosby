@@ -37,7 +37,7 @@ class ProductController extends Controller implements HasMiddleware
         return view('admin.products.index', [
             'products' => $products,
             'categories' => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
-            'summary' => $this->summary(),
+            'summary' => $this->summary($request),
         ]);
     }
 
@@ -172,11 +172,16 @@ class ProductController extends Controller implements HasMiddleware
     /**
      * Empat angka ringkasan diambil sekali jalan, bukan empat query terpisah.
      *
+     * Saringan yang sedang berlaku ikut diterapkan, kecuali saringan kondisi
+     * stok — kartu Menipis dan Habis justru pemilih kondisi itu. Sebelumnya
+     * angka ini dihitung atas seluruh barang sementara tabelnya sudah disaring,
+     * sehingga kartu dan daftar bercerita beda.
+     *
      * @return array<string, int>
      */
-    protected function summary(): array
+    protected function summary(Request $request): array
     {
-        $row = Product::query()
+        $row = $this->scoped($request)
             ->selectRaw('COUNT(*) as total')
             ->selectRaw('COALESCE(SUM(stock), 0) as units')
             ->selectRaw('SUM(CASE WHEN stock <= min_stock AND stock > 0 THEN 1 ELSE 0 END) as low')
@@ -196,12 +201,21 @@ class ProductController extends Controller implements HasMiddleware
      */
     protected function filtered(Request $request): Builder
     {
+        return $this->scoped($request)
+            ->when($request->input('stock') === 'low', fn ($query) => $query->lowStock()->where('stock', '>', 0))
+            ->when($request->input('stock') === 'out', fn ($query) => $query->where('stock', '<=', 0))
+            ->when($request->input('stock') === 'safe', fn ($query) => $query->whereColumn('stock', '>', 'min_stock'));
+    }
+
+    /**
+     * Saringan di luar kondisi stok. Dipakai bersama daftar dan ringkasannya,
+     * karena kartu ringkasan itulah pemilih kondisi stoknya.
+     */
+    protected function scoped(Request $request): Builder
+    {
         return Product::query()
             ->search($request->string('search')->trim()->value())
             ->when($request->filled('category'), fn ($query) => $query->where('category', $request->string('category')))
-            ->when($request->input('stock') === 'low', fn ($query) => $query->lowStock()->where('stock', '>', 0))
-            ->when($request->input('stock') === 'out', fn ($query) => $query->where('stock', '<=', 0))
-            ->when($request->input('stock') === 'safe', fn ($query) => $query->whereColumn('stock', '>', 'min_stock'))
             ->when($request->filled('status'), fn ($query) => $query->where('is_active', $request->input('status') === 'active'));
     }
 

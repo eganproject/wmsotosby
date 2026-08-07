@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Support\DateRange;
 use App\Models\ShipmentImport;
 use App\Models\ShipmentOrder;
+use App\Models\ShipmentOrderItem;
 use App\Services\GineeImportService;
 use App\Services\ShipmentOrderResolver;
+use App\Support\DateRange;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,14 +46,10 @@ class ShipmentImportController extends Controller implements HasMiddleware
      */
     public function index(Request $request): View
     {
-        $orders = ShipmentOrder::query()
+        $orders = $this->filtered($request)
             ->with(['items.product', 'import'])
-            ->search($request->string('search')->trim()->value())
-            ->when($request->filled('marketplace'), fn ($query) => $query->where('marketplace', $request->string('marketplace')))
-            ->when($request->filled('courier'), fn ($query) => $query->where('courier', $request->string('courier')))
             ->when($request->input('match') === 'unmatched', fn ($query) => $query->whereHas('items', fn ($items) => $items->whereNull('product_id')))
             ->when($request->input('match') === 'matched', fn ($query) => $query->whereDoesntHave('items', fn ($items) => $items->whereNull('product_id')))
-            ->dateBetween(DateRange::fromRequest($request))
             ->latestFirst()
             ->paginate(10)
             ->withQueryString();
@@ -60,13 +58,45 @@ class ShipmentImportController extends Controller implements HasMiddleware
             'orders' => $orders,
             'marketplaces' => ShipmentOrder::query()->whereNotNull('marketplace')->distinct()->orderBy('marketplace')->pluck('marketplace'),
             'couriers' => ShipmentOrder::query()->whereNotNull('courier')->distinct()->orderBy('courier')->pluck('courier'),
-            'summary' => [
-                'orders' => ShipmentOrder::count(),
-                'items' => \App\Models\ShipmentOrderItem::count(),
-                'unmatched' => \App\Models\ShipmentOrderItem::whereNull('product_id')->count(),
-                'batches' => ShipmentImport::count(),
-            ],
+            'summary' => $this->summary($request),
         ]);
+    }
+
+    /**
+     * Saringan atas pesanan, di luar kecocokan SKU — kartu "SKU Belum Cocok"
+     * justru pemilihnya.
+     */
+    protected function filtered(Request $request): Builder
+    {
+        return ShipmentOrder::query()
+            ->search($request->string('search')->trim()->value())
+            ->when($request->filled('marketplace'), fn (Builder $query) => $query->where('marketplace', $request->string('marketplace')))
+            ->when($request->filled('courier'), fn (Builder $query) => $query->where('courier', $request->string('courier')))
+            ->dateBetween(DateRange::fromRequest($request));
+    }
+
+    /**
+     * Angka kartu mengikuti saringan yang sedang berlaku.
+     *
+     * Sebelumnya seluruhnya dihitung atas seluruh data sementara tabelnya sudah
+     * disaring, sehingga kartu dan daftar bercerita beda.
+     *
+     * Jumlah berkas import tetap dihitung apa adanya: ia menghitung unggahan,
+     * bukan pesanan, dan menyaringnya dengan saringan pesanan tidak punya arti.
+     *
+     * @return array<string, int>
+     */
+    protected function summary(Request $request): array
+    {
+        $items = ShipmentOrderItem::query()
+            ->whereIn('shipment_order_id', $this->filtered($request)->select('shipment_orders.id'));
+
+        return [
+            'orders' => $this->filtered($request)->count(),
+            'items' => (clone $items)->count(),
+            'unmatched' => (clone $items)->whereNull('product_id')->count(),
+            'batches' => ShipmentImport::count(),
+        ];
     }
 
     public function create(): View
