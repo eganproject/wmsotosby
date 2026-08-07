@@ -113,4 +113,55 @@
     .flatpickr-day.flatpickr-disabled {
         @apply text-ink-200;
     }
+
+    /* ------------------------------------------- flatpickr mode rentang -- */
+
+    /*
+        Bawaan flatpickr memakai biru dan sudut membulat di tiap hari, sehingga
+        rentang terbaca sebagai deretan kotak terpisah alih-alih satu batang.
+        Di sini isinya disambung dengan bayangan kiri-kanan — cara flatpickr
+        sendiri menutup celah antar sel tabel — dan hanya kedua ujungnya yang
+        digelapkan.
+    */
+    .flatpickr-day.inRange,
+    .flatpickr-day.inRange:hover,
+    .flatpickr-day.inRange:focus {
+        @apply rounded-none border-ink-100 bg-ink-100 text-ink-800;
+        box-shadow: -5px 0 0 #e7e7e7, 5px 0 0 #e7e7e7;
+    }
+
+    .flatpickr-day.startRange,
+    .flatpickr-day.endRange,
+    .flatpickr-day.startRange:hover,
+    .flatpickr-day.endRange:hover,
+    .flatpickr-day.startRange:focus,
+    .flatpickr-day.endRange:focus {
+        @apply border-ink-950 bg-ink-950 text-white;
+        box-shadow: none;
+    }
+
+    .flatpickr-day.startRange {
+        @apply rounded-l-lg rounded-r-none;
+    }
+
+    .flatpickr-day.endRange {
+        @apply rounded-r-lg rounded-l-none;
+    }
+
+    /* Rentang sehari: kedua ujungnya jatuh pada tanggal yang sama. */
+    .flatpickr-day.startRange.endRange {
+        @apply rounded-lg;
+    }
+
+    /* Sambungan antara ujung awal dan hari berikutnya di baris yang sama. */
+    .flatpickr-day.selected.startRange + .endRange:not(:nth-child(7n + 1)),
+    .flatpickr-day.startRange.startRange + .endRange:not(:nth-child(7n + 1)) {
+        box-shadow: -10px 0 0 #0a0a0a;
+    }
+
+    /* Pratinjau rentang selagi kursor bergerak sebelum ujung kedua dipilih. */
+    .flatpickr-day.inRange.nextMonthDay,
+    .flatpickr-day.inRange.prevMonthDay {
+        @apply text-ink-400;
+    }
 }

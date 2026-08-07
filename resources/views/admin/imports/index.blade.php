@@ -39,8 +39,8 @@
     @endif
 
     <form method="GET" action="{{ route('admin.imports.index') }}" data-auto-submit
-          class="my-5 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card sm:flex-row sm:items-center">
-        <div class="relative flex-1">
+          class="my-5 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card">
+        <div class="relative">
             <span class="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-ink-300">
                 <x-icon name="search" class="h-4 w-4" />
             </span>
@@ -70,15 +70,19 @@
             </x-ui.select>
         </div>
 
-        <x-ui.date-filter label="Tanggal pesanan" />
+        {{-- Rentang tanggal berbaris sendiri: kolomnya membawa pintasan periode
+             di bawahnya, dan itu tidak muat disisipkan di antara dropdown. --}}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <x-ui.date-filter label="Tanggal pesanan" />
 
-        <div class="flex items-center gap-2">
-            <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
-            @if (request()->hasAny(['search', 'marketplace', 'match', 'courier', 'from', 'to']))
-                <x-ui.button :href="route('admin.imports.index')" variant="ghost" size="icon" title="Reset filter">
-                    <x-icon name="refresh" class="h-4 w-4" />
-                </x-ui.button>
-            @endif
+            <div class="flex items-center gap-2">
+                <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
+                @if (request()->hasAny(['search', 'marketplace', 'match', 'courier', 'from', 'to']))
+                    <x-ui.button :href="route('admin.imports.index')" variant="ghost" size="icon" title="Reset filter">
+                        <x-icon name="refresh" class="h-4 w-4" />
+                    </x-ui.button>
+                @endif
+            </div>
         </div>
     </form>
 

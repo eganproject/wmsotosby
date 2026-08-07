@@ -11,32 +11,38 @@
     <x-ui.tabs group="adjustment" />
 
     <form method="GET" action="{{ route('admin.opnames.index') }}" data-auto-submit
-          class="mb-5 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card sm:flex-row sm:items-center">
-        <div class="relative flex-1">
-            <span class="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-ink-300">
-                <x-icon name="search" class="h-4 w-4" />
-            </span>
-            <x-text-input type="search" name="search" :value="request('search')"
-                          placeholder="Cari nomor sesi, cakupan, atau catatan..." class="pl-10" />
+          class="mb-5 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div class="relative flex-1">
+                <span class="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-ink-300">
+                    <x-icon name="search" class="h-4 w-4" />
+                </span>
+                <x-text-input type="search" name="search" :value="request('search')"
+                              placeholder="Cari nomor sesi, cakupan, atau catatan..." class="pl-10" />
+            </div>
+
+            <x-ui.select name="status" class="sm:w-44">
+                <option value="">Semua status</option>
+                <option value="draft" @selected(request('status') === 'draft')>Sedang dihitung</option>
+                <option value="pending" @selected(request('status') === 'pending')>Menunggu persetujuan</option>
+                <option value="posted" @selected(request('status') === 'posted')>Selesai</option>
+                <option value="rejected" @selected(request('status') === 'rejected')>Ditolak</option>
+            </x-ui.select>
         </div>
 
-        <x-ui.select name="status" class="sm:w-44">
-            <option value="">Semua status</option>
-            <option value="draft" @selected(request('status') === 'draft')>Sedang dihitung</option>
-            <option value="pending" @selected(request('status') === 'pending')>Menunggu persetujuan</option>
-            <option value="posted" @selected(request('status') === 'posted')>Selesai</option>
-            <option value="rejected" @selected(request('status') === 'rejected')>Ditolak</option>
-        </x-ui.select>
+        {{-- Rentang tanggal berbaris sendiri: kolomnya membawa pintasan periode
+             di bawahnya, dan itu tidak muat disisipkan di antara dropdown. --}}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <x-ui.date-filter label="Tanggal opname" />
 
-        <x-ui.date-filter label="Tanggal opname" />
-
-        <div class="flex items-center gap-2">
-            <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
-            @if (request()->hasAny(['search', 'status', 'from', 'to']))
-                <x-ui.button :href="route('admin.opnames.index')" variant="ghost" size="icon" title="Reset filter">
-                    <x-icon name="refresh" class="h-4 w-4" />
-                </x-ui.button>
-            @endif
+            <div class="flex items-center gap-2">
+                <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
+                @if (request()->hasAny(['search', 'status', 'from', 'to']))
+                    <x-ui.button :href="route('admin.opnames.index')" variant="ghost" size="icon" title="Reset filter">
+                        <x-icon name="refresh" class="h-4 w-4" />
+                    </x-ui.button>
+                @endif
+            </div>
         </div>
     </form>
 

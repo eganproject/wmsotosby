@@ -17,6 +17,8 @@ flatpickr.localize(Indonesian);
 
 const DATE_SELECTOR = 'input[type="date"]:not([data-enhanced])';
 
+const RANGE_SELECTOR = '[data-date-range]:not([data-enhanced])';
+
 // Kalender flatpickr merender <select> bulannya sendiri. Bila ikut dibungkus
 // Tom Select, tombol pindah bulan berhenti bekerja — jadi harus dikecualikan.
 const SELECT_SELECTOR = [
@@ -51,6 +53,116 @@ function enhanceDate(input) {
     });
 
     instances.set(input, { type: 'date', destroy: () => picker.destroy() });
+}
+
+/* --------------------------------------------------------- rentang tanggal */
+
+/**
+ * Saringan rentang tanggal dalam satu kolom.
+ *
+ * Yang terlihat hanyalah cerminan; nilai sebenarnya tetap dikirim sebagai dua
+ * parameter, from dan to, lewat kolom tersembunyi — sehingga seluruh controller,
+ * tautan pintasan, dan alamat yang pernah disalin orang tetap berlaku.
+ */
+function enhanceDateRange(container) {
+    if (instances.has(container)) return;
+
+    const input = container.querySelector('[data-date-range-input]');
+    const from = container.querySelector('[data-date-range-from]');
+    const to = container.querySelector('[data-date-range-to]');
+
+    if (! input || ! from || ! to) return;
+
+    container.dataset.enhanced = 'true';
+
+    const clear = container.querySelector('[data-date-range-clear]');
+    const defaults = [from.value, to.value].filter(Boolean);
+
+    const picker = flatpickr(input, {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+
+        // Angka, bukan nama bulan: teks ini harus sama persis dengan yang
+        // dirender server sebelum flatpickr mengambil alih, dan menyamakan nama
+        // bulan berarti menaruh dua daftar bulan di dua tempat yang bisa
+        // menyimpang — Carbon menulis "Agt", flatpickr menulis "Agu".
+        altFormat: 'd/m/Y',
+
+        allowInput: false,
+        disableMobile: true,
+
+        // Mode rentang menggabungkan kedua tanggal dengan rangeSeparator milik
+        // locale, bukan dengan conjunction — jadi pemisahnya diatur di sini.
+        locale: { ...Indonesian, rangeSeparator: ' – ' },
+
+        defaultDate: defaults.length ? defaults : null,
+
+        onReady(selectedDates, dateStr, instance) {
+            instance.altInput.className = input.className;
+            instance.altInput.placeholder = input.placeholder;
+            // altInput tidak bernama, jadi tandai agar tidak memicu auto-submit.
+            instance.altInput.dataset.altInput = 'true';
+            instance.altInput.readOnly = true;
+        },
+
+        onChange(selectedDates, dateStr, instance) {
+            // Rentang setengah jadi dibiarkan apa adanya.
+            //
+            // Klik pertama belum boleh menyaring — halamannya akan dimuat ulang
+            // dan kalendernya keburu tertutup sebelum ujung kedua sempat
+            // dipilih. Kolom tersembunyinya pun tidak disentuh, supaya
+            // pemilihan yang ditinggalkan di tengah tidak diam-diam mengubah
+            // saringan yang sedang berlaku.
+            if (selectedDates.length === 1) return;
+
+            const [start, end] = selectedDates;
+
+            from.value = start ? instance.formatDate(start, 'Y-m-d') : '';
+            to.value = end ? instance.formatDate(end, 'Y-m-d') : '';
+
+            clear?.classList.toggle('hidden', selectedDates.length === 0);
+
+            submitFilter(container);
+        },
+    });
+
+    const reset = (event) => {
+        event.preventDefault();
+
+        // Tanpa false, clear() memancarkan onChange sendiri dan halamannya
+        // dikirim ulang dua kali untuk satu ketukan.
+        picker.clear(false);
+
+        from.value = '';
+        to.value = '';
+        clear?.classList.add('hidden');
+
+        submitFilter(container);
+    };
+
+    clear?.addEventListener('click', reset);
+
+    instances.set(container, {
+        type: 'range',
+        destroy: () => {
+            clear?.removeEventListener('click', reset);
+            picker.destroy();
+        },
+    });
+}
+
+/**
+ * Kirim ulang formnya bila memang halaman yang menyaring sendiri.
+ *
+ * Nilai ditulis langsung ke kolom tersembunyi, dan kolom tersembunyi tidak
+ * pernah memancarkan event input — jadi auto-submit bawaan tidak akan
+ * menyadarinya. Halaman yang mengandalkan tombol Terapkan dibiarkan apa adanya.
+ */
+function submitFilter(container) {
+    const form = container.closest('form[data-auto-submit]');
+
+    form?.requestSubmit();
 }
 
 /* ---------------------------------------------------------------- select */
@@ -101,9 +213,13 @@ function enhanceSelect(select) {
 function enhance(root = document) {
     if (! root.querySelectorAll) return;
 
-    if (root.matches?.(DATE_SELECTOR)) enhanceDate(root);
+    if (root.matches?.(RANGE_SELECTOR)) enhanceDateRange(root);
+    else if (root.matches?.(DATE_SELECTOR)) enhanceDate(root);
     else if (root.matches?.(SELECT_SELECTOR)) enhanceSelect(root);
 
+    // Rentang lebih dulu: kolom di dalamnya diurus flatpickr sendiri dan tidak
+    // boleh ikut dipasangi kontrol kedua.
+    root.querySelectorAll(RANGE_SELECTOR).forEach(enhanceDateRange);
     root.querySelectorAll(DATE_SELECTOR).forEach(enhanceDate);
     root.querySelectorAll(SELECT_SELECTOR).forEach(enhanceSelect);
 }

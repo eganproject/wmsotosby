@@ -129,15 +129,101 @@ class DateFilterTest extends TestCase
             ->assertSee($document);
     }
 
+    /**
+     * Satu kolom yang terlihat, dua parameter yang terkirim.
+     *
+     * Nilainya tetap dikirim sebagai from dan to lewat kolom tersembunyi
+     * sehingga controller, tautan pintasan, maupun alamat yang pernah disalin
+     * orang tetap berlaku — yang berubah hanya tampilannya.
+     */
     #[\PHPUnit\Framework\Attributes\DataProvider('pages')]
-    public function test_the_page_offers_the_date_fields_and_shortcuts(string $kind, string $route): void
+    public function test_the_page_offers_one_field_that_still_sends_both_bounds(string $kind, string $route): void
     {
-        $this->actingAs($this->admin)->get(route($route))
+        $html = $this->actingAs($this->admin)->get(route($route))
             ->assertOk()
-            ->assertSee('name="from"', false)
-            ->assertSee('name="to"', false)
+            ->assertSee('data-date-range', false)
             ->assertSee('Hari ini')
-            ->assertSee('Bulan ini');
+            ->assertSee('Bulan ini')
+            ->getContent();
+
+        $this->assertSame(1, substr_count($html, 'data-date-range-input'), 'Hanya boleh ada satu kolom tanggal.');
+
+        foreach (['from', 'to'] as $bound) {
+            $this->assertStringContainsString(
+                "<input type=\"hidden\" name=\"{$bound}\"",
+                $html,
+                "Batas {$bound} harus tetap terkirim.",
+            );
+        }
+
+        // Kolom tanggal kembar yang lama tidak boleh tersisa di mana pun.
+        $this->assertStringNotContainsString('type="date" name="from"', $html);
+        $this->assertStringNotContainsString('type="date" name="to"', $html);
+    }
+
+    /**
+     * Rentang yang sedang aktif harus terbaca sejak halaman dimuat, bukan
+     * setelah JavaScript sempat berjalan — kolom kosong padahal daftarnya
+     * tersaring adalah kebohongan yang mahal.
+     */
+    public function test_the_active_range_is_readable_without_javascript(): void
+    {
+        $this->makeDocument('outbound', Carbon::parse('2026-08-05'), 'BARU');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.outbounds.index', ['from' => '2026-08-01', 'to' => '2026-08-31']))
+            ->assertOk()
+            ->assertSee('01/08/2026 – 31/08/2026');
+    }
+
+    /**
+     * Rentang sehari ditulis satu kali saja.
+     *
+     * flatpickr membuang tanggal kembar pada mode rentang, jadi teks yang
+     * dirender server harus melakukan hal yang sama — kalau tidak, tulisannya
+     * berubah sendiri begitu JavaScript selesai dimuat.
+     */
+    public function test_a_single_day_range_is_written_once(): void
+    {
+        $this->makeDocument('outbound', Carbon::parse('2026-08-05'), 'BARU');
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.outbounds.index', ['from' => '2026-08-05', 'to' => '2026-08-05']))
+            ->assertOk();
+
+        $this->assertStringContainsString('value="05/08/2026"', $response->getContent());
+        $this->assertStringNotContainsString('05/08/2026 – 05/08/2026', $response->getContent());
+    }
+
+    /**
+     * Rentang bertepi terbuka tidak bisa digambarkan kalender, jadi tepinya
+     * disebut dengan kata — kalau tidak, "01/08/2026" terbaca seperti saringan
+     * satu hari padahal daftarnya memuat semua yang sesudahnya.
+     */
+    public function test_an_open_ended_range_says_which_end_is_missing(): void
+    {
+        $this->makeDocument('outbound', Carbon::parse('2026-08-05'), 'BARU');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.outbounds.index', ['from' => '2026-08-01']))
+            ->assertOk()
+            ->assertSee('01/08/2026', false)
+            ->assertSee('Tanpa batas akhir');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.outbounds.index', ['to' => '2026-08-31']))
+            ->assertOk()
+            ->assertSee('31/08/2026', false)
+            ->assertSee('Tanpa batas awal');
+    }
+
+    /** Tanggal yang tidak terbaca tidak boleh menjatuhkan kolomnya. */
+    public function test_an_unreadable_date_leaves_the_field_empty(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.outbounds.index', ['from' => 'kemarin', 'to' => '31-08-2026']))
+            ->assertOk()
+            ->assertSee('placeholder="Semua tanggal"', false);
     }
 
     /* --------------------------------------------------- kasus khusus ---- */
