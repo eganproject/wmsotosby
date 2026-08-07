@@ -199,6 +199,22 @@ Tetapi ada dua akibat sampingan yang perlu diketahui lebih dulu:
 - **Sandi akun `admin@wmsotosby.test` kembali menjadi `password`.** Bila akun
   itu masih dipakai, ganti sandinya lagi setelah seeder selesai.
 
+### Resi batal yang sudah telanjur masuk
+
+Status pesanan sudah ikut tersimpan sejak import pertama, tetapi dulu tidak
+pernah dibaca. Import berikutnya membacanya sendiri; untuk data yang sudah
+telanjur masuk ada perintah tersendiri:
+
+```bash
+php artisan waybills:flag-cancelled            # lihat dulu, tidak menulis apa pun
+php artisan waybills:flag-cancelled --apply    # baru menandai
+```
+
+Tanpa `--apply` perintah itu hanya menampilkan seluruh status yang ada beserta
+jumlahnya, dan mana yang akan terbaca sebagai batal. Jalankan yang pertama
+lebih dulu: menandai resi batal berarti paketnya tidak bisa lagi discan maupun
+dikirim, dan keputusan seperti itu diambil setelah melihat.
+
 Pemegang role Super Admin tidak perlu menunggu seeder — role itu melewati
 seluruh pemeriksaan izin, jadi halaman barunya langsung terbuka. Yang
 membutuhkannya adalah role lain, dan setelah seeder dijalankan izinnya bisa
