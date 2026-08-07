@@ -70,28 +70,32 @@
     </div>
 
     <form method="GET" action="{{ route('admin.imports.status') }}" data-auto-submit
-          class="my-5 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card sm:flex-row sm:items-center">
+          class="my-5 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card">
         {{-- Tahap yang sedang dipilih ikut terbawa saat mencari. --}}
         <input type="hidden" name="stage" value="{{ $stage }}">
 
-        <div class="relative flex-1">
-            <span class="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-ink-300">
-                <x-icon name="search" class="h-4 w-4" />
-            </span>
-            <x-text-input type="search" name="search" :value="request('search')"
-                          placeholder="Cari nomor resi, pesanan, pembeli, atau SKU..." class="pl-10" />
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div class="relative flex-1">
+                <span class="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-ink-300">
+                    <x-icon name="search" class="h-4 w-4" />
+                </span>
+                <x-text-input type="search" name="search" :value="request('search')"
+                              placeholder="Cari nomor resi, pesanan, pembeli, atau SKU..." class="pl-10" />
+            </div>
+
+            <x-ui.select name="courier" class="sm:w-48">
+                <option value="">Semua ekspedisi</option>
+                @foreach ($couriers as $courier)
+                    <option value="{{ $courier }}" @selected(request('courier') === $courier)>{{ $courier }}</option>
+                @endforeach
+            </x-ui.select>
         </div>
 
-        <x-ui.select name="courier" class="sm:w-48">
-            <option value="">Semua ekspedisi</option>
-            @foreach ($couriers as $courier)
-                <option value="{{ $courier }}" @selected(request('courier') === $courier)>{{ $courier }}</option>
-            @endforeach
-        </x-ui.select>
+        <x-ui.date-filter label="Tanggal pesanan" />
 
         <div class="flex items-center gap-2">
             <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
-            @if (request()->hasAny(['search', 'courier', 'stage']))
+            @if (request()->hasAny(['search', 'courier', 'stage', 'from', 'to']))
                 <x-ui.button :href="route('admin.imports.status')" variant="ghost" size="icon" title="Reset filter">
                     <x-icon name="refresh" class="h-4 w-4" />
                 </x-ui.button>

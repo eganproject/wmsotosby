@@ -1,0 +1,54 @@
+<?php
+
+namespace App\Models\Concerns;
+
+use Illuminate\Database\Eloquent\Builder;
+
+/**
+ * Saringan rentang tanggal yang dipakai bersama seluruh daftar dokumen.
+ *
+ * Ditaruh di satu tempat, bukan diulang di tiap controller, karena bagian yang
+ * gampang salah bukan penulisan query-nya melainkan penanganan tepinya:
+ * batasnya harus inklusif di kedua ujung, dan masukan yang tidak terbaca harus
+ * diabaikan alih-alih menjatuhkan halaman.
+ */
+trait FiltersByDate
+{
+    /**
+     * Saring menurut rentang tanggal. Kedua ujungnya inklusif.
+     *
+     * Nilai yang bukan tanggal diabaikan begitu saja. Alamat yang disalin
+     * tempel sering rusak sebagian, dan daftar yang tetap tampil apa adanya
+     * lebih berguna daripada halaman galat.
+     */
+    public function scopeDateBetween(Builder $query, ?string $from, ?string $to): Builder
+    {
+        $column = $this->dateFilterColumn();
+
+        return $query
+            ->when(static::dateFilterValue($from), fn (Builder $query, string $date) => $query->whereDate($column, '>=', $date))
+            ->when(static::dateFilterValue($to), fn (Builder $query, string $date) => $query->whereDate($column, '<=', $date));
+    }
+
+    /**
+     * Kolom tanggal yang mewakili dokumen ini. Ditimpa model yang tanggal
+     * pentingnya bukan bernama "date".
+     */
+    protected function dateFilterColumn(): string
+    {
+        return 'date';
+    }
+
+    /**
+     * Terima hanya bentuk yang dikirim kolom tanggal HTML; sisanya null.
+     *
+     * Namanya sengaja panjang: Eloquent sudah punya asDate() sendiri untuk
+     * casting atribut, dan menimpanya membuat model gagal dimuat sama sekali.
+     */
+    protected static function dateFilterValue(?string $value): ?string
+    {
+        $trimmed = trim((string) $value);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $trimmed) === 1 ? $trimmed : null;
+    }
+}

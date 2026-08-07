@@ -42,6 +42,7 @@ class StockAdjustmentController extends Controller implements HasMiddleware
             ->search($request->string('search')->trim()->value())
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->when($request->filled('reason'), fn ($query) => $query->where('reason', $request->string('reason')))
+            ->dateBetween($request->input('from'), $request->input('to'))
             ->latest('date')
             ->latest('id')
             ->paginate(10)

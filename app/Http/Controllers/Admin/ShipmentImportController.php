@@ -50,6 +50,7 @@ class ShipmentImportController extends Controller implements HasMiddleware
             ->when($request->filled('courier'), fn ($query) => $query->where('courier', $request->string('courier')))
             ->when($request->input('match') === 'unmatched', fn ($query) => $query->whereHas('items', fn ($items) => $items->whereNull('product_id')))
             ->when($request->input('match') === 'matched', fn ($query) => $query->whereDoesntHave('items', fn ($items) => $items->whereNull('product_id')))
+            ->dateBetween($request->input('from'), $request->input('to'))
             ->latest('id')
             ->paginate(10)
             ->withQueryString();

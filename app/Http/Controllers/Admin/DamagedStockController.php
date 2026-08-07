@@ -53,6 +53,7 @@ class DamagedStockController extends Controller implements HasMiddleware
             ->with('user')
             ->withCount('items')
             ->withSum('items', 'quantity')
+            ->dateBetween($request->input('from'), $request->input('to'))
             ->latest('date')
             ->latest('id')
             ->paginate(10, ['*'], 'dokumen')

@@ -24,6 +24,33 @@
                         hint="Dokumen penanganan" />
     </div>
 
+    {{--
+        Saringan tanggal untuk riwayat penanganan. Saldo barang rusak di
+        sampingnya adalah keadaan sekarang, bukan kejadian bertanggal, jadi
+        pencariannya ikut terbawa apa adanya lewat kolom tersembunyi.
+    --}}
+    <form method="GET" action="{{ route('admin.disposals.index') }}" data-auto-submit
+          class="mt-5 flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card">
+        @if (request()->filled('search'))
+            <input type="hidden" name="search" value="{{ request('search') }}">
+        @endif
+
+        <div>
+            <p class="mb-2 text-xs font-medium uppercase tracking-wider text-ink-400">Riwayat penanganan</p>
+            <x-ui.date-filter label="Tanggal penanganan" />
+        </div>
+
+        <div class="flex items-center gap-2">
+            <x-ui.button type="submit" variant="secondary" icon="filter">Terapkan</x-ui.button>
+            @if (request()->hasAny(['from', 'to']))
+                <x-ui.button :href="route('admin.disposals.index', request()->only('search'))"
+                             variant="ghost" size="icon" title="Reset filter">
+                    <x-icon name="refresh" class="h-4 w-4" />
+                </x-ui.button>
+            @endif
+        </div>
+    </form>
+
     <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
         {{-- Saldo --}}
         <x-ui.card title="Saldo Barang Rusak" subtitle="Unit rusak yang masih ada fisiknya di gudang." padding="p-0">

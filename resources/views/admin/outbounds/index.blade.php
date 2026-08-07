@@ -41,9 +41,11 @@
             </x-ui.select>
         </div>
 
+        <x-ui.date-filter label="Tanggal dokumen" />
+
         <div class="flex items-center gap-2">
             <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
-            @if (request()->hasAny(['search', 'status', 'type', 'marketplace']))
+            @if (request()->hasAny(['search', 'status', 'type', 'marketplace', 'from', 'to']))
                 <x-ui.button :href="route('admin.outbounds.index')" variant="ghost" size="icon" title="Reset filter">
                     <x-icon name="refresh" class="h-4 w-4" />
                 </x-ui.button>

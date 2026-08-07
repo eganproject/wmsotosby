@@ -48,6 +48,7 @@ class WaybillStatusController extends Controller implements HasMiddleware
             ->atStage($stage)
             ->search($request->string('search')->trim()->value())
             ->when($request->filled('courier'), fn ($query) => $query->where('courier', $request->string('courier')))
+            ->dateBetween($request->input('from'), $request->input('to'))
             ->latest('id')
             ->paginate(20)
             ->withQueryString();

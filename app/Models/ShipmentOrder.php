@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FiltersByDate;
 use App\Support\NormalizesScanCode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class ShipmentOrder extends Model
 {
-    use NormalizesScanCode;
+    use FiltersByDate, NormalizesScanCode;
 
     protected $fillable = [
         'shipment_import_id',
@@ -370,6 +371,25 @@ class ShipmentOrder extends Model
                         ->orWhereDoesntHave('items')
                         ->orWhereHas('items', fn (Builder $items) => $items
                             ->whereColumn('scanned_quantity', '<', 'quantity')))));
+    }
+
+    /**
+     * Disaring menurut tanggal pesanan.
+     *
+     * Eksport Ginee tidak selalu menyertakan kolom tanggal, dan pesanan tanpa
+     * tanggal akan lenyap seluruhnya begitu saringan dinyalakan — jawaban yang
+     * salah tanpa satu pun petunjuk. Yang kosong karena itu memakai waktu
+     * berkasnya masuk ke sistem.
+     */
+    public function scopeDateBetween(Builder $query, ?string $from, ?string $to): Builder
+    {
+        $column = 'DATE(COALESCE(order_date, shipment_orders.created_at))';
+
+        return $query
+            ->when(static::dateFilterValue($from), fn (Builder $query, string $date) => $query
+                ->whereRaw("{$column} >= ?", [$date]))
+            ->when(static::dateFilterValue($to), fn (Builder $query, string $date) => $query
+                ->whereRaw("{$column} <= ?", [$date]));
     }
 
     public function scopeSearch(Builder $query, ?string $term): Builder

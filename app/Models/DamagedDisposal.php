@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FiltersByDate;
 use App\Models\Concerns\HasApprovalWorkflow;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class DamagedDisposal extends Model
 {
-    use HasApprovalWorkflow;
+    use FiltersByDate, HasApprovalWorkflow;
 
     public const STATUS_DRAFT = 'draft';
 

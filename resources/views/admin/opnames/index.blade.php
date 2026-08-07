@@ -28,9 +28,11 @@
             <option value="rejected" @selected(request('status') === 'rejected')>Ditolak</option>
         </x-ui.select>
 
+        <x-ui.date-filter label="Tanggal opname" />
+
         <div class="flex items-center gap-2">
             <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
-            @if (request()->hasAny(['search', 'status']))
+            @if (request()->hasAny(['search', 'status', 'from', 'to']))
                 <x-ui.button :href="route('admin.opnames.index')" variant="ghost" size="icon" title="Reset filter">
                     <x-icon name="refresh" class="h-4 w-4" />
                 </x-ui.button>
