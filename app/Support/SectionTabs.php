@@ -63,6 +63,8 @@ class SectionTabs
             'waybill' => [
                 ['label' => 'Status Resi', 'icon' => 'search', 'route' => 'admin.imports.status',
                     'match' => 'admin.imports.status', 'can' => 'imports.view'],
+                ['label' => 'Per Ekspedisi', 'icon' => 'chart', 'route' => 'admin.imports.couriers',
+                    'match' => 'admin.imports.couriers', 'can' => 'imports.view'],
                 ['label' => 'Data Import', 'icon' => 'document', 'route' => 'admin.imports.index',
                     'match' => ['admin.imports.index', 'admin.imports.show', 'admin.imports.create'],
                     'can' => 'imports.view'],

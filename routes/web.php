@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ApprovalController;
+use App\Http\Controllers\Admin\CourierReportController;
 use App\Http\Controllers\Admin\DamagedStockController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\InboundController;
@@ -111,6 +112,7 @@ Route::middleware('auth')
 
         // Import resi dari Ginee
         Route::get('imports/status', WaybillStatusController::class)->name('imports.status');
+        Route::get('imports/couriers', CourierReportController::class)->name('imports.couriers');
         Route::post('imports/orders/{order}/cancel', [ShipmentOrderCancellationController::class, 'store'])->name('imports.orders.cancel');
         Route::delete('imports/orders/{order}/cancel', [ShipmentOrderCancellationController::class, 'destroy'])->name('imports.orders.restore');
         Route::get('imports/lookup', [ShipmentImportController::class, 'lookup'])->name('imports.lookup');
