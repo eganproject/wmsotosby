@@ -12,12 +12,16 @@ use Illuminate\View\View;
 /**
  * Status resi: posisi setiap nomor resi hasil import di dalam alur gudang.
  *
- * Tiga tahap, dibaca dari data yang sudah ada — bukan status yang diketik
+ * Tahapannya dibaca dari data yang sudah ada — bukan status yang diketik
  * manual, sehingga tidak mungkin melenceng dari kenyataan:
  *
- *   Belum QC  → resi atau barangnya belum tuntas discan
+ *   Belum QC   → resi atau barangnya belum tuntas discan
  *   Siap Kirim → scan lengkap, dokumen belum diproses
- *   Dikirim   → dokumen disetujui, stok sudah berkurang
+ *   Dikirim    → dokumen disetujui, stok sudah berkurang
+ *   Dibatalkan → pesanan batal dan barangnya belum berangkat
+ *
+ * Kecuali yang terakhir: pembatalan memang datang dari luar gudang, entah
+ * terbaca dari berkas import atau ditandai petugas.
  */
 class WaybillStatusController extends Controller implements HasMiddleware
 {
@@ -35,6 +39,7 @@ class WaybillStatusController extends Controller implements HasMiddleware
         $orders = ShipmentOrder::query()
             ->with([
                 'items',
+                'canceller',
                 // Sum dipakai agar progres scan tidak perlu memuat baris barang.
                 'outbound' => fn ($query) => $query
                     ->withSum('items', 'quantity')
@@ -70,6 +75,7 @@ class WaybillStatusController extends Controller implements HasMiddleware
             ShipmentOrder::STAGE_AWAITING_QC => ShipmentOrder::awaitingQc()->count(),
             ShipmentOrder::STAGE_CHECKED => ShipmentOrder::qualityChecked()->count(),
             ShipmentOrder::STAGE_SHIPPED => ShipmentOrder::shipped()->count(),
+            ShipmentOrder::STAGE_CANCELLED => ShipmentOrder::cancelled()->count(),
         ];
     }
 }

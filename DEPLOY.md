@@ -165,11 +165,25 @@ Bila suatu saat ada yang aneh setelah pembaruan, bersihkan dulu:
 php artisan optimize:clear
 ```
 
-## 8. Pembaruan yang menambah izin baru
+## 8. Pembaruan yang mengubah basis data
+
+Urutan bakunya setiap kali menarik pembaruan:
+
+```bash
+git pull
+composer install --no-dev --optimize-autoloader   # bila composer.lock berubah
+php artisan migrate --force                       # bila ada migrasi baru
+php artisan optimize:clear
+```
+
+`migrate` aman diulang: yang sudah pernah dijalankan dilewati.
+
+### Izin baru
 
 Sebagian pembaruan memperkenalkan izin baru — misalnya `reports.view` untuk
-Laporan Stok. Izin itu tersimpan sebagai baris di basis data, bukan di kode,
-jadi ia belum ada di server sampai seedernya dijalankan lagi:
+Laporan Stok, atau `imports.cancel` untuk menandai resi batal. Izin itu
+tersimpan sebagai baris di basis data, bukan di kode, jadi ia belum ada di
+server sampai seedernya dijalankan lagi:
 
 ```bash
 php artisan db:seed --class=RolePermissionSeeder

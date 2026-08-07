@@ -56,6 +56,7 @@ class DashboardController extends Controller
             ShipmentOrder::STAGE_AWAITING_QC => ShipmentOrder::awaitingQc()->count(),
             ShipmentOrder::STAGE_CHECKED => ShipmentOrder::qualityChecked()->count(),
             ShipmentOrder::STAGE_SHIPPED => ShipmentOrder::shipped()->count(),
+            ShipmentOrder::STAGE_CANCELLED => ShipmentOrder::cancelled()->count(),
         ];
     }
 

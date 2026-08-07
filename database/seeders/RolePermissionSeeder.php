@@ -95,6 +95,7 @@ class RolePermissionSeeder extends Seeder
         'Import Resi' => [
             'imports.view' => 'Melihat data resi hasil import',
             'imports.create' => 'Mengimport berkas resi dari Ginee',
+            'imports.cancel' => 'Menandai resi dibatalkan pembeli',
             'imports.delete' => 'Menghapus data import',
         ],
         'Pengguna' => [
@@ -169,7 +170,7 @@ class RolePermissionSeeder extends Seeder
                 'inbounds.view', 'inbounds.create', 'inbounds.update', 'inbounds.post',
                 'outbounds.view', 'outbounds.create', 'outbounds.update', 'outbounds.scan', 'outbounds.post',
                 'returns.view', 'returns.create', 'returns.update', 'returns.scan', 'returns.post',
-                'imports.view', 'imports.create',
+                'imports.view', 'imports.create', 'imports.cancel',
                 'suppliers.view', 'suppliers.create',
                 'adjustments.view', 'adjustments.create', 'adjustments.update', 'adjustments.post',
                 'opnames.view', 'opnames.create', 'opnames.update', 'opnames.post',

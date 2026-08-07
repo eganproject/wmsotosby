@@ -459,10 +459,10 @@ class GineeImportService
                 $items = $data['items'];
                 unset($data['items']);
 
-                // Resi yang sama pada import baru menggantikan data lama.
-                ShipmentOrder::where('tracking_number', $data['tracking_number'])->delete();
+                $order = $this->upsertOrder($import, $data);
 
-                $order = $import->orders()->create($data);
+                // Isi pesanan selalu diambil ulang dari berkas terbaru.
+                $order->items()->delete();
 
                 foreach ($items as $item) {
                     $productId = $products[strtoupper(trim($item['sku']))] ?? null;
@@ -482,5 +482,37 @@ class GineeImportService
 
             return $import->refresh();
         });
+    }
+
+    /**
+     * Perbarui baris resi yang sudah ada, atau buat baru.
+     *
+     * Dulu baris lama dihapus lalu dibuat dari nol. Kolom shipment_order_id
+     * pada dokumen barang keluar diatur nullOnDelete, sehingga setiap import
+     * ulang diam-diam memutus tautan dokumen yang sudah ada — termasuk yang
+     * sudah dikirim, yang lalu muncul lagi sebagai "Belum QC" di halaman
+     * Status Resi padahal stoknya sudah berkurang.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function upsertOrder(ShipmentImport $import, array $data): ShipmentOrder
+    {
+        $order = ShipmentOrder::firstOrNew(['tracking_number' => $data['tracking_number']]);
+
+        // Import terbaru yang menyebut resi ini menjadi pemiliknya.
+        $order->fill($data + ['shipment_import_id' => $import->id]);
+
+        // Berkas import hanya boleh menambahkan pembatalan, tidak pernah
+        // mencabutnya: petugas yang menandai batal dari aplikasi marketplace
+        // biasanya tahu lebih dulu daripada berkas yang diekspor belakangan.
+        if (ShipmentOrder::looksCancelled($data['order_status'] ?? null) && ! $order->isCancelled()) {
+            $order->cancelled_at = now();
+            $order->cancelled_by = null;
+            $order->cancellation_reason = null;
+        }
+
+        $order->save();
+
+        return $order;
     }
 }

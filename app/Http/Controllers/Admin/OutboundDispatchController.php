@@ -37,7 +37,7 @@ class OutboundDispatchController extends Controller implements HasMiddleware
     public function index(Request $request): View
     {
         $outbounds = Outbound::readyToShip()
-            ->with('user')
+            ->with('user', 'shipmentOrder')
             ->withCount('items')
             ->withSum('items', 'quantity')
             ->search($request->string('search')->trim()->value())
@@ -69,7 +69,7 @@ class OutboundDispatchController extends Controller implements HasMiddleware
 
         $documents = Outbound::readyToShip()
             ->whereIn('id', $ids)
-            ->with('items.product')
+            ->with('items.product', 'shipmentOrder')
             ->get();
 
         if ($documents->isEmpty()) {
@@ -83,6 +83,15 @@ class OutboundDispatchController extends Controller implements HasMiddleware
         $failed = [];
 
         foreach ($documents as $outbound) {
+            // Dijaga di sini juga, bukan hanya pada jalur scan: mencentang
+            // seluruh halaman lalu menekan proses adalah cara termudah
+            // mengirim paket batal tanpa sengaja.
+            if ($outbound->shipmentOrder?->isCancelled()) {
+                $failed[] = $outbound->code.' — Pesanan dibatalkan pembeli, kembalikan barang ke rak.';
+
+                continue;
+            }
+
             try {
                 $selfApprove
                     ? $this->approvals->submitAndApprove($outbound)
@@ -124,7 +133,7 @@ class OutboundDispatchController extends Controller implements HasMiddleware
             ]);
         }
 
-        $outbound->load('items.product');
+        $outbound->load('items.product', 'shipmentOrder');
 
         $this->guardDispatchable($outbound);
 
@@ -171,6 +180,9 @@ class OutboundDispatchController extends Controller implements HasMiddleware
     {
         $reason = match (true) {
             $outbound->isPosted() => "Sudah dikirim · {$outbound->code}",
+            // Pembatalan bisa datang setelah paket selesai di-QC dan sudah
+            // berada di antrean, jadi tidak cukup menjaganya di stasiun packing.
+            $outbound->shipmentOrder?->isCancelled() => "Pesanan dibatalkan pembeli · kembalikan barang, hapus {$outbound->code}",
             $outbound->isPending() => "Menunggu persetujuan · {$outbound->code}",
             $outbound->isRejected() => "Ditolak penyetuju · {$outbound->code}",
             ! $outbound->isMarketplace() => "Bukan paket marketplace · proses dari dokumen {$outbound->code}",

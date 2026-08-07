@@ -87,7 +87,7 @@
             @endforelse
         </x-ui.card>
 
-        {{-- Status resi: tiga tahap alur gudang, dihitung dari dokumennya --}}
+        {{-- Status resi: tahapan alur gudang, dihitung dari dokumennya --}}
         <x-ui.card title="Status Resi" subtitle="Posisi resi hasil import di alur gudang">
             @php
                 $stages = [
@@ -97,6 +97,8 @@
                         'hint' => 'QC selesai, menunggu diproses', 'tone' => 'text-ink-950 bg-ink-100'],
                     \App\Models\ShipmentOrder::STAGE_SHIPPED => ['label' => 'Dikirim', 'icon' => 'logout',
                         'hint' => 'Disetujui, stok sudah berkurang', 'tone' => 'text-emerald-700 bg-emerald-50'],
+                    \App\Models\ShipmentOrder::STAGE_CANCELLED => ['label' => 'Dibatalkan', 'icon' => 'x-circle',
+                        'hint' => 'Batal sebelum berangkat — jangan dikirim', 'tone' => 'text-red-700 bg-red-50'],
                 ];
                 $waybillTotal = max(array_sum($waybills), 1);
             @endphp

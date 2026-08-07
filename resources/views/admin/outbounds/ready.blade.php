@@ -21,7 +21,8 @@
     <div x-data="dispatchStation({
              url: '{{ route('admin.outbounds.ready.scan') }}',
              remaining: {{ $readyCount }},
-             queued: @js($outbounds->pluck('id')->all()),
+             {{-- Paket batal sengaja tidak masuk daftar yang bisa dicentang. --}}
+             queued: @js($outbounds->reject(fn ($outbound) => $outbound->shipmentOrder?->isCancelled())->pluck('id')->values()->all()),
          })"
          {{-- Hasil pindaian kamera diperlakukan sama persis dengan scanner genggam. --}}
          x-on:camera-scan.window="code = $event.detail.code; submit()">
@@ -231,6 +232,8 @@
 
                     <ul class="divide-y divide-ink-50">
                         @foreach ($outbounds as $outbound)
+                            @php $cancelled = (bool) $outbound->shipmentOrder?->isCancelled(); @endphp
+
                             {{--
                                 Tautan detail sengaja berada di luar <label>: elemen
                                 interaktif di dalam label membuat kliknya ikut
@@ -238,12 +241,22 @@
                                 yang menekannya.
                             --}}
                             <li x-show="! isSent({{ $outbound->id }})"
-                                class="flex items-start gap-3 px-5 py-4 transition hover:bg-ink-50/50"
+                                @class([
+                                    'flex items-start gap-3 px-5 py-4 transition',
+                                    'bg-red-50/60' => $cancelled,
+                                    'hover:bg-ink-50/50' => ! $cancelled,
+                                ])
                                 :class="selected.includes({{ $outbound->id }}) && 'bg-ink-50/70'">
-                                <label class="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                                <label class="flex min-w-0 flex-1 items-start gap-3 {{ $cancelled ? 'cursor-default' : 'cursor-pointer' }}">
+                                    {{--
+                                        Paket batal tetap ditampilkan, bukan disembunyikan:
+                                        barangnya sudah turun dari rak dan seseorang harus
+                                        mengembalikannya. Yang dicabut hanya kemampuan
+                                        mencentangnya.
+                                    --}}
                                     <input type="checkbox" name="ids[]" value="{{ $outbound->id }}" x-model.number="selected"
-                                           :disabled="isSent({{ $outbound->id }})"
-                                           class="mt-1 h-4 w-4 shrink-0 rounded border-ink-300 text-ink-950 focus:ring-ink-950">
+                                           @disabled($cancelled) :disabled="isSent({{ $outbound->id }})"
+                                           class="mt-1 h-4 w-4 shrink-0 rounded border-ink-300 text-ink-950 focus:ring-ink-950 disabled:opacity-40">
 
                                     <div class="min-w-0 flex-1">
                                         <div class="flex flex-wrap items-center gap-2">
@@ -251,12 +264,25 @@
                                             @if ($outbound->marketplace)
                                                 <x-ui.badge variant="dark" icon="sparkles">{{ $outbound->marketplace }}</x-ui.badge>
                                             @endif
-                                            <x-ui.badge variant="success" icon="check">
-                                                {{ number_format((int) $outbound->items_sum_quantity, 0, ',', '.') }} unit discan
-                                            </x-ui.badge>
+
+                                            @if ($cancelled)
+                                                <x-ui.badge variant="danger" icon="x-circle">Dibatalkan pembeli</x-ui.badge>
+                                            @else
+                                                <x-ui.badge variant="success" icon="check">
+                                                    {{ number_format((int) $outbound->items_sum_quantity, 0, ',', '.') }} unit discan
+                                                </x-ui.badge>
+                                            @endif
                                         </div>
 
                                         <p class="mt-1 truncate font-mono text-xs text-ink-500">{{ $outbound->tracking_number }}</p>
+
+                                        @if ($cancelled)
+                                            <p class="text-xs font-medium text-red-700">
+                                                Kembalikan {{ number_format((int) $outbound->items_sum_quantity, 0, ',', '.') }} unit ke rak,
+                                                lalu hapus dokumen ini.
+                                            </p>
+                                        @endif
+
                                         <p class="truncate text-xs text-ink-400">
                                             {{ $outbound->recipient }}
                                             &middot; {{ $outbound->items_count }} SKU

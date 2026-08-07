@@ -68,6 +68,15 @@ class OutboundMarketplaceController extends Controller implements HasMiddleware
             ]);
         }
 
+        // Diperiksa sebelum dokumen dibentuk: paket batal tidak boleh dibuka
+        // sama sekali, karena setiap unit yang discan akan berakhir sebagai
+        // stok yang berkurang untuk pesanan yang tidak akan pernah berangkat.
+        if ($order->isCancelled()) {
+            throw ValidationException::withMessages([
+                'code' => 'Pesanan dibatalkan pembeli · kembalikan barang ke rak',
+            ]);
+        }
+
         $outbound = $this->documentFor($order);
 
         return response()->json([

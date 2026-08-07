@@ -6,7 +6,7 @@
 --}}
 <x-app-layout title="Status Resi">
     <x-ui.page-header title="Status Resi" icon="search"
-                      subtitle="Posisi setiap resi hasil import: belum QC, siap dikirim, atau sudah dikirim.">
+                      subtitle="Posisi setiap resi hasil import: belum QC, siap dikirim, sudah dikirim, atau dibatalkan.">
         <x-slot name="actions">
             @can('outbounds.scan')
                 <x-ui.button :href="route('admin.outbounds.marketplace')" variant="secondary" icon="search">
@@ -35,10 +35,13 @@
             \App\Models\ShipmentOrder::STAGE_SHIPPED => ['label' => 'Dikirim', 'icon' => 'logout',
                    'hint' => 'Disetujui, stok sudah berkurang',
                    'count' => $counts[\App\Models\ShipmentOrder::STAGE_SHIPPED], 'ring' => 'ring-emerald-200', 'text' => 'text-emerald-700'],
+            \App\Models\ShipmentOrder::STAGE_CANCELLED => ['label' => 'Dibatalkan', 'icon' => 'x-circle',
+                   'hint' => 'Batal sebelum berangkat — jangan dikirim',
+                   'count' => $counts[\App\Models\ShipmentOrder::STAGE_CANCELLED], 'ring' => 'ring-red-200', 'text' => 'text-red-700'],
         ];
     @endphp
 
-    <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
+    <div class="grid grid-cols-2 gap-4 xl:grid-cols-5">
         @foreach ($cards as $key => $card)
             <a href="{{ route('admin.imports.status', array_filter(array_merge(request()->query(), ['stage' => $key, 'page' => null]))) }}"
                @class([
@@ -146,24 +149,31 @@
                                 <td class="px-6 py-4 align-top">
                                     <x-ui.badge :variant="match ($orderStage) {
                                         \App\Models\ShipmentOrder::STAGE_SHIPPED => 'success',
-                                        \App\Models\ShipmentOrder::STAGE_CHECKED => 'dark',
+                                        \App\Models\ShipmentOrder::STAGE_CANCELLED => 'danger',
                                         default => 'warning',
                                     }">{{ $order->stageLabel() }}</x-ui.badge>
                                     <p class="mt-1 text-[11px] text-ink-500">{{ $order->stageDetail() }}</p>
                                 </td>
 
                                 <td class="px-6 py-4 text-right align-top">
-                                    @if ($order->outbound)
-                                        <a href="{{ route('admin.outbounds.show', $order->outbound) }}"
-                                           class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-ink-600 transition hover:bg-ink-100 hover:text-ink-950">
-                                            <x-icon name="eye" class="h-3.5 w-3.5" />
-                                            {{ $order->outbound->code }}
-                                        </a>
-                                    @elseif (! $order->isFullyMatched())
-                                        <span class="text-[11px] text-red-600">SKU belum terdaftar</span>
-                                    @else
-                                        <span class="text-[11px] text-ink-400">Belum ada dokumen</span>
-                                    @endif
+                                    <div class="flex flex-col items-end gap-1">
+                                        @if ($order->outbound)
+                                            <a href="{{ route('admin.outbounds.show', $order->outbound) }}"
+                                               class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-ink-600 transition hover:bg-ink-100 hover:text-ink-950">
+                                                <x-icon name="eye" class="h-3.5 w-3.5" />
+                                                {{ $order->outbound->code }}
+                                            </a>
+                                        @elseif (! $order->isFullyMatched())
+                                            <span class="text-[11px] text-red-600">SKU belum terdaftar</span>
+                                        @else
+                                            <span class="text-[11px] text-ink-400">Belum ada dokumen</span>
+                                        @endif
+
+                                        {{-- Yang sudah berangkat tidak bisa dibatalkan di sini: itu urusan retur. --}}
+                                        @if ($orderStage !== \App\Models\ShipmentOrder::STAGE_SHIPPED)
+                                            @include('admin.imports.partials.cancel-control')
+                                        @endif
+                                    </div>
                                 </td>
                             </tr>
                         @endforeach
@@ -185,6 +195,7 @@
                             <x-ui.badge :variant="match ($orderStage) {
                                 \App\Models\ShipmentOrder::STAGE_SHIPPED => 'success',
                                 \App\Models\ShipmentOrder::STAGE_CHECKED => 'dark',
+                                \App\Models\ShipmentOrder::STAGE_CANCELLED => 'danger',
                                 default => 'warning',
                             }">{{ $order->stageLabel() }}</x-ui.badge>
                         </div>
@@ -201,6 +212,12 @@
                                 </a>
                             @endif
                         </div>
+
+                        @if ($orderStage !== \App\Models\ShipmentOrder::STAGE_SHIPPED)
+                            <div class="mt-2">
+                                @include('admin.imports.partials.cancel-control')
+                            </div>
+                        @endif
                     </div>
                 @endforeach
             </div>

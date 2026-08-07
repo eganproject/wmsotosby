@@ -24,6 +24,9 @@ class ShipmentOrder extends Model
         'store_name',
         'buyer_name',
         'order_status',
+        'cancelled_at',
+        'cancelled_by',
+        'cancellation_reason',
         'courier',
         'shipping_method',
         'buyer_note',
@@ -34,6 +37,7 @@ class ShipmentOrder extends Model
     {
         return [
             'order_date' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -60,6 +64,64 @@ class ShipmentOrder extends Model
         return $this->hasOne(Outbound::class)->latestOfMany();
     }
 
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /* -------------------------------------------------------- pembatalan -- */
+
+    /**
+     * Kata yang menandakan pesanan batal pada status dari marketplace.
+     *
+     * Dicocokkan sebagai penggalan, bukan kata utuh, supaya "Dibatalkan",
+     * "Cancelled", maupun "Pembatalan Diminta" sama-sama tertangkap. Permintaan
+     * pembatalan yang belum disetujui sengaja ikut dihitung: justru saat itulah
+     * paketnya belum boleh dipacking.
+     *
+     * @var array<int, string>
+     */
+    public const CANCELLED_MARKERS = ['batal', 'cancel'];
+
+    public static function looksCancelled(?string $status): bool
+    {
+        if (blank($status)) {
+            return false;
+        }
+
+        $needle = mb_strtolower($status);
+
+        foreach (self::CANCELLED_MARKERS as $marker) {
+            if (str_contains($needle, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    /** Ditandai orang, bukan terbaca dari berkas import. */
+    public function isCancelledByHand(): bool
+    {
+        return $this->isCancelled() && $this->cancelled_by !== null;
+    }
+
+    public function cancellationDetail(): string
+    {
+        if (! $this->isCancelled()) {
+            return '';
+        }
+
+        return $this->isCancelledByHand()
+            ? 'Ditandai batal · '.($this->cancellation_reason ?: 'tanpa alasan')
+            : 'Batal menurut data import'.($this->order_status ? " ({$this->order_status})" : '');
+    }
+
     /* ------------------------------------------------------------ tahap -- */
 
     public const STAGE_AWAITING_QC = 'belum-qc';
@@ -68,6 +130,8 @@ class ShipmentOrder extends Model
 
     public const STAGE_SHIPPED = 'dikirim';
 
+    public const STAGE_CANCELLED = 'batal';
+
     /**
      * @var array<string, string>
      */
@@ -75,6 +139,7 @@ class ShipmentOrder extends Model
         self::STAGE_AWAITING_QC => 'Belum QC',
         self::STAGE_CHECKED => 'Siap Dikirim',
         self::STAGE_SHIPPED => 'Dikirim',
+        self::STAGE_CANCELLED => 'Dibatalkan',
     ];
 
     /**
@@ -87,12 +152,19 @@ class ShipmentOrder extends Model
     {
         $outbound = $this->outbound;
 
-        if (! $outbound) {
-            return self::STAGE_AWAITING_QC;
+        // Paket yang sudah berangkat tetap "dikirim" meskipun pesanannya
+        // kemudian dibatalkan: stoknya memang sudah keluar, dan pembatalan
+        // sesudah itu urusannya penerimaan retur, bukan halaman ini.
+        if ($outbound?->isPosted()) {
+            return self::STAGE_SHIPPED;
         }
 
-        if ($outbound->isPosted()) {
-            return self::STAGE_SHIPPED;
+        if ($this->isCancelled()) {
+            return self::STAGE_CANCELLED;
+        }
+
+        if (! $outbound) {
+            return self::STAGE_AWAITING_QC;
         }
 
         return $outbound->isResiVerified() && $this->outboundFullyScanned()
@@ -113,14 +185,21 @@ class ShipmentOrder extends Model
     {
         $outbound = $this->outbound;
 
+        if ($outbound?->isPosted()) {
+            return 'Dikirim '.$outbound->posted_at?->translatedFormat('d M Y H:i');
+        }
+
+        if ($this->isCancelled()) {
+            // Dokumen yang sudah terlanjur dibuat perlu disebut: barangnya
+            // mungkin sudah turun dari rak dan harus dikembalikan.
+            return $this->cancellationDetail()
+                .($outbound ? " · kembalikan barang, hapus {$outbound->code}" : '');
+        }
+
         if (! $outbound) {
             return $this->isFullyMatched()
                 ? 'Belum discan sama sekali'
                 : 'SKU belum lengkap di master barang';
-        }
-
-        if ($outbound->isPosted()) {
-            return 'Dikirim '.$outbound->posted_at?->translatedFormat('d M Y H:i');
         }
 
         if (! $outbound->isResiVerified()) {
@@ -137,17 +216,37 @@ class ShipmentOrder extends Model
     }
 
     /**
-     * Unit yang sudah discan pada dokumennya. Memakai hasil withSum bila
-     * tersedia supaya daftar tidak memuat baris barang satu per satu.
+     * Unit yang sudah discan pada dokumennya.
      */
     public function scannedUnits(): int
     {
-        return (int) ($this->outbound?->items_sum_scanned_quantity ?? 0);
+        return $this->units('scanned_quantity');
     }
 
     public function orderedUnits(): int
     {
-        return (int) ($this->outbound?->items_sum_quantity ?? 0);
+        return $this->units('quantity');
+    }
+
+    /**
+     * Memakai hasil withSum bila pemanggilnya menyediakannya, supaya daftar
+     * tidak memuat baris barang satu per satu.
+     *
+     * Bila tidak ada, dihitung langsung dari barisnya. Tanpa cadangan ini
+     * angkanya jatuh menjadi nol dan tahapnya terbaca "Belum QC" — jawaban
+     * yang salah tetapi terlihat wajar, sehingga tidak ada yang curiga.
+     */
+    protected function units(string $column): int
+    {
+        $outbound = $this->outbound;
+
+        if (! $outbound) {
+            return 0;
+        }
+
+        $summed = $outbound->getAttribute('items_sum_'.$column);
+
+        return (int) ($summed ?? $outbound->items()->sum($column));
     }
 
     protected function outboundFullyScanned(): bool
@@ -211,6 +310,7 @@ class ShipmentOrder extends Model
             self::STAGE_SHIPPED => $query->shipped(),
             self::STAGE_CHECKED => $query->qualityChecked(),
             self::STAGE_AWAITING_QC => $query->awaitingQc(),
+            self::STAGE_CANCELLED => $query->cancelled(),
             default => $query,
         };
     }
@@ -222,12 +322,28 @@ class ShipmentOrder extends Model
     }
 
     /**
+     * Dibatalkan dan memang belum berangkat.
+     *
+     * Yang sudah berangkat sengaja dikeluarkan dari sini supaya jumlah tiap
+     * tahap tetap bisa dijumlahkan menjadi total tanpa ada yang terhitung dua
+     * kali — persis seperti yang dilakukan stage().
+     */
+    public function scopeCancelled(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('cancelled_at')
+            ->whereDoesntHave('outbounds', fn (Builder $outbound) => $outbound
+                ->where('status', Outbound::STATUS_POSTED));
+    }
+
+    /**
      * Sudah QC: resi terverifikasi dan seluruh barangnya discan, tetapi
      * dokumennya belum diproses.
      */
     public function scopeQualityChecked(Builder $query): Builder
     {
         return $query
+            ->whereNull('cancelled_at')
             ->whereDoesntHave('outbounds', fn (Builder $outbound) => $outbound
                 ->where('status', Outbound::STATUS_POSTED))
             ->whereHas('outbounds', fn (Builder $outbound) => $outbound
@@ -243,6 +359,7 @@ class ShipmentOrder extends Model
     public function scopeAwaitingQc(Builder $query): Builder
     {
         return $query
+            ->whereNull('cancelled_at')
             ->whereDoesntHave('outbounds', fn (Builder $outbound) => $outbound
                 ->where('status', Outbound::STATUS_POSTED))
             ->where(fn (Builder $query) => $query

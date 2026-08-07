@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\ReturnReceiptController;
 use App\Http\Controllers\Admin\ReturnScanController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\ShipmentImportController;
+use App\Http\Controllers\Admin\ShipmentOrderCancellationController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockMovementController;
 use App\Http\Controllers\Admin\StockOpnameController;
@@ -106,6 +107,8 @@ Route::middleware('auth')
 
         // Import resi dari Ginee
         Route::get('imports/status', WaybillStatusController::class)->name('imports.status');
+        Route::post('imports/orders/{order}/cancel', [ShipmentOrderCancellationController::class, 'store'])->name('imports.orders.cancel');
+        Route::delete('imports/orders/{order}/cancel', [ShipmentOrderCancellationController::class, 'destroy'])->name('imports.orders.restore');
         Route::get('imports/lookup', [ShipmentImportController::class, 'lookup'])->name('imports.lookup');
         Route::get('imports/batches', [ShipmentImportController::class, 'batches'])->name('imports.batches');
         Route::resource('imports', ShipmentImportController::class)->except('edit', 'update')
