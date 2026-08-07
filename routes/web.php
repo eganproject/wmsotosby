@@ -40,6 +40,7 @@ Route::middleware('auth')
         Route::get('products/import', [ProductImportController::class, 'create'])->name('products.import');
         Route::post('products/import', [ProductImportController::class, 'store'])->name('products.import.store');
         Route::get('products/import/template', [ProductImportController::class, 'template'])->name('products.import.template');
+        Route::patch('products/bulk/min-stock', [ProductController::class, 'bulkMinStock'])->name('products.bulk.min-stock');
         Route::resource('products', ProductController::class);
 
         Route::get('movements/export', [StockMovementController::class, 'export'])->name('movements.export');

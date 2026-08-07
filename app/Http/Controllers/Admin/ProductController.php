@@ -22,7 +22,7 @@ class ProductController extends Controller implements HasMiddleware
         return [
             new Middleware('can:products.view', only: ['index', 'show', 'export']),
             new Middleware('can:products.create', only: ['create', 'store']),
-            new Middleware('can:products.update', only: ['edit', 'update']),
+            new Middleware('can:products.update', only: ['edit', 'update', 'bulkMinStock']),
             new Middleware('can:products.delete', only: ['destroy']),
         ];
     }
@@ -89,6 +89,84 @@ class ProductController extends Controller implements HasMiddleware
         return redirect()
             ->route('admin.products.show', $product)
             ->with('success', 'Data barang berhasil diperbarui.');
+    }
+
+    /**
+     * Ubah batas stok menipis banyak barang sekaligus.
+     *
+     * Yang diubah hanya batasnya, bukan stoknya. Batas minimum adalah setelan
+     * kapan sebuah barang mulai disebut menipis — ia tidak pernah menambah atau
+     * mengurangi saldo, dan karena itu tidak meninggalkan mutasi stok. Inilah
+     * satu-satunya alasan penyuntingan massal aman dilakukan di sini: tidak ada
+     * angka gudang yang bisa menjadi rancu karenanya.
+     */
+    public function bulkMinStock(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'min_stock' => ['required', 'integer', 'min:0', 'max:999999'],
+            'scope' => ['required', 'in:selected,filtered'],
+            'ids' => ['required_if:scope,selected', 'array'],
+            'ids.*' => ['integer'],
+        ], [], [
+            'min_stock' => 'batas stok menipis',
+            'ids' => 'barang yang dipilih',
+        ]);
+
+        // Sasarannya ditentukan ulang di sisi server, bukan dipercaya dari
+        // layar: saringan yang sama persis dipakai daftar, export, dan di sini.
+        $target = $data['scope'] === 'filtered'
+            ? $this->filtered($request)
+            : Product::query()->whereIn('id', $data['ids']);
+
+        $total = (clone $target)->count();
+
+        if ($total === 0) {
+            return $this->backToProducts($request)
+                ->with('error', 'Tidak ada barang yang cocok. Mungkin sudah diubah orang lain.');
+        }
+
+        // Baris yang nilainya sudah sama sengaja tidak disentuh supaya
+        // updated_at-nya tidak ikut bergeser tanpa ada yang benar-benar berubah.
+        $changed = (clone $target)
+            ->where('min_stock', '!=', $data['min_stock'])
+            ->update(['min_stock' => $data['min_stock']]);
+
+        return $this->backToProducts($request)->with('success', $this->bulkSummary(
+            $total,
+            $changed,
+            $data['min_stock'],
+        ));
+    }
+
+    /**
+     * Laporkan yang benar-benar terjadi, bukan sekadar "berhasil".
+     */
+    protected function bulkSummary(int $total, int $changed, int $minStock): string
+    {
+        if ($changed === 0) {
+            return "Batas stok menipis {$total} barang memang sudah {$minStock}. Tidak ada yang diubah.";
+        }
+
+        $message = "Batas stok menipis {$changed} barang diubah menjadi {$minStock}.";
+
+        return $changed === $total
+            ? $message
+            : $message.' '.($total - $changed).' barang lainnya sudah bernilai sama.';
+    }
+
+    /**
+     * Kembali ke daftar dengan saringan yang tadi dipakai.
+     *
+     * Nomor halaman sengaja tidak dibawa: mengubah batas menipis mengubah pula
+     * barang mana yang lolos saringan "Menipis", sehingga halaman yang sama
+     * bisa saja sudah tidak ada isinya.
+     */
+    protected function backToProducts(Request $request): RedirectResponse
+    {
+        return redirect()->route('admin.products.index', array_filter(
+            $request->only(['search', 'category', 'stock', 'status']),
+            fn ($value) => filled($value),
+        ));
     }
 
     /**
