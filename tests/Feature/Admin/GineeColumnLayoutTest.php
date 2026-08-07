@@ -138,7 +138,10 @@ class GineeColumnLayoutTest extends TestCase
     {
         $this->upload($this->sheet());
 
-        $this->actingAs($this->admin)->get(route('admin.imports.index'))
+        // Daftar terbuka pada hari berjalan, sedangkan pesanan pada berkas ini
+        // bertanggal 4 Agustus 2026 — jadi rentang penuh diminta dulu.
+        $this->actingAs($this->admin)
+            ->get(route('admin.imports.index', ['range' => \App\Support\DateRange::ALL]))
             ->assertOk()
             ->assertSee('SPX Standard')
             ->assertSee('SPX Hemat')

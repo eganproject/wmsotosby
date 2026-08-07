@@ -2,6 +2,7 @@
 
 namespace App\Models\Concerns;
 
+use App\Support\DateRange;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -17,17 +18,18 @@ trait FiltersByDate
     /**
      * Saring menurut rentang tanggal. Kedua ujungnya inklusif.
      *
-     * Nilai yang bukan tanggal diabaikan begitu saja. Alamat yang disalin
-     * tempel sering rusak sebagian, dan daftar yang tetap tampil apa adanya
-     * lebih berguna daripada halaman galat.
+     * Rentangnya diterima sebagai objek, bukan sepasang string, supaya setiap
+     * daftar melewati resolusi yang sama — termasuk bawaan hari berjalan dan
+     * penanda "semua tanggal". Dua daftar yang menafsirkan alamat yang sama
+     * secara berbeda adalah jenis kesalahan yang sangat sulit disadari.
      */
-    public function scopeDateBetween(Builder $query, ?string $from, ?string $to): Builder
+    public function scopeDateBetween(Builder $query, DateRange $range): Builder
     {
         $column = $this->dateFilterColumn();
 
         return $query
-            ->when(static::dateFilterValue($from), fn (Builder $query, string $date) => $query->whereDate($column, '>=', $date))
-            ->when(static::dateFilterValue($to), fn (Builder $query, string $date) => $query->whereDate($column, '<=', $date));
+            ->when(static::dateFilterValue($range->from), fn (Builder $query, string $date) => $query->whereDate($column, '>=', $date))
+            ->when(static::dateFilterValue($range->to), fn (Builder $query, string $date) => $query->whereDate($column, '<=', $date));
     }
 
     /**

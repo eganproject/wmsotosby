@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\DateRange;
 use App\Models\DamagedDisposal;
 use App\Models\Product;
 use App\Models\StockMovement;
@@ -58,7 +59,7 @@ class DamagedStockController extends Controller implements HasMiddleware
             ->with('user')
             ->withCount('items')
             ->withSum('items', 'quantity')
-            ->dateBetween($request->input('from'), $request->input('to'))
+            ->dateBetween(DateRange::fromRequest($request))
             ->latest('date')
             ->latest('id')
             ->paginate(10, ['*'], 'dokumen')

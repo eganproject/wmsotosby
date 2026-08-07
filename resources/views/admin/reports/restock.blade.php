@@ -86,7 +86,13 @@
 
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div class="flex flex-wrap items-end gap-3">
-                <x-ui.date-filter label="Periode pengamatan laju keluar" />
+                {{--
+                    Laporan menyerahkan rentangnya sendiri: periodenya 30 hari,
+                    bukan hari berjalan seperti daftar dokumen. Rata-rata laju
+                    keluar atas satu hari tidak berarti apa-apa.
+                --}}
+                <x-ui.date-filter label="Periode pengamatan laju keluar" :allow-all="false"
+                                  :range="new \App\Support\DateRange($filters->from->toDateString(), $filters->to->toDateString())" />
 
                 {{--
                     Berapa hari ke depan yang ingin diamankan. Angka inilah yang

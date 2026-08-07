@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\DateRange;
 use App\Http\Requests\Admin\StoreStockAdjustmentRequest;
 use App\Http\Requests\Admin\UpdateStockAdjustmentRequest;
 use App\Models\Product;
@@ -42,7 +43,7 @@ class StockAdjustmentController extends Controller implements HasMiddleware
             ->search($request->string('search')->trim()->value())
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->when($request->filled('reason'), fn ($query) => $query->where('reason', $request->string('reason')))
-            ->dateBetween($request->input('from'), $request->input('to'))
+            ->dateBetween(DateRange::fromRequest($request))
             ->latest('date')
             ->latest('id')
             ->paginate(10)

@@ -12,6 +12,7 @@ use App\Models\ShipmentOrder;
 use App\Models\StockAdjustment;
 use App\Models\StockOpname;
 use App\Models\User;
+use App\Support\DateRange;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -76,10 +77,46 @@ class DateFilterTest extends TestCase
             ->assertSee($recent)
             ->assertDontSee($old);
 
-        // Tanpa saringan keduanya tetap tampil.
-        $this->actingAs($this->admin)->get(route($route))
+        // Rentang penuh harus diminta terang-terangan.
+        $this->actingAs($this->admin)->get(route($route, ['range' => DateRange::ALL]))
             ->assertOk()
             ->assertSee($recent)
+            ->assertSee($old);
+    }
+
+    /**
+     * Daftar terbuka pada hari berjalan.
+     *
+     * Pekerjaan gudang hampir selalu tentang hari ini, dan daftar yang membuka
+     * seluruh riwayat memaksa orang menyaring ulang setiap kali.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('pages')]
+    public function test_a_list_opens_on_the_current_day(string $kind, string $route): void
+    {
+        $today = $this->makeDocument($kind, Carbon::today(), 'HARIINI');
+        $old = $this->makeDocument($kind, Carbon::today()->subMonth(), 'LAMA');
+
+        $this->actingAs($this->admin)->get(route($route))
+            ->assertOk()
+            ->assertSee($today)
+            ->assertDontSee($old);
+    }
+
+    /**
+     * Mengosongkan tanggal tidak lagi berarti "semua": kosong berarti hari ini.
+     * Tanpa penanda tersendiri, daftar tidak akan pernah bisa dibuka penuh.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('pages')]
+    public function test_the_full_range_needs_its_own_marker(string $kind, string $route): void
+    {
+        $old = $this->makeDocument($kind, Carbon::today()->subMonth(), 'LAMA');
+
+        $this->actingAs($this->admin)->get(route($route, ['from' => '', 'to' => '']))
+            ->assertOk()
+            ->assertDontSee($old);
+
+        $this->actingAs($this->admin)->get(route($route, ['range' => DateRange::ALL]))
+            ->assertOk()
             ->assertSee($old);
     }
 
@@ -121,12 +158,13 @@ class DateFilterTest extends TestCase
     #[\PHPUnit\Framework\Attributes\DataProvider('pages')]
     public function test_an_unreadable_date_is_ignored_instead_of_breaking_the_page(string $kind, string $route): void
     {
-        $document = $this->makeDocument($kind, Carbon::parse('2026-08-05'), 'BARU');
+        $today = $this->makeDocument($kind, Carbon::today(), 'HARIINI');
 
+        // Diabaikan berarti jatuh ke bawaannya, bukan menjatuhkan halaman.
         $this->actingAs($this->admin)
             ->get(route($route, ['from' => 'kemarin', 'to' => '31-08-2026']))
             ->assertOk()
-            ->assertSee($document);
+            ->assertSee($today);
     }
 
     /**
@@ -240,13 +278,43 @@ class DateFilterTest extends TestCase
         $order = $this->makeOrder(null, 'TANPATANGGAL');
         $this->travelBack();
 
-        $this->assertSame(1, ShipmentOrder::dateBetween('2026-08-01', '2026-08-31')->count());
-        $this->assertSame(0, ShipmentOrder::dateBetween('2026-07-01', '2026-07-31')->count());
+        $this->assertSame(1, ShipmentOrder::dateBetween(new DateRange('2026-08-01', '2026-08-31'))->count());
+        $this->assertSame(0, ShipmentOrder::dateBetween(new DateRange('2026-07-01', '2026-07-31'))->count());
 
         $this->actingAs($this->admin)
             ->get(route('admin.imports.status', ['from' => '2026-08-01', 'to' => '2026-08-31']))
             ->assertOk()
             ->assertSee($order->tracking_number);
+    }
+
+    /**
+     * Resi diurutkan menurut tanggal yang sama dengan yang dipakai saringannya.
+     *
+     * Sebelumnya urutannya menurut nomor baris, yang berarti urutan masuknya
+     * berkas import — bukan urutan pesanannya. Menyaring menurut satu tanggal
+     * lalu mengurutkan menurut hal lain membuat halaman pertama tidak berisi
+     * yang paling baru.
+     */
+    public function test_waybills_are_ordered_by_the_date_the_filter_uses(): void
+    {
+        // Sengaja dimasukkan terbalik: yang tertua justru punya id terbesar.
+        $this->makeOrder(Carbon::parse('2026-08-01'), 'SPX-TENGAH');
+        $this->makeOrder(Carbon::parse('2026-08-06'), 'SPX-BARU');
+        $this->makeOrder(Carbon::parse('2026-07-20'), 'SPX-LAMA');
+
+        foreach (['admin.imports.index', 'admin.imports.status'] as $route) {
+            $html = $this->actingAs($this->admin)
+                ->get(route($route, ['range' => DateRange::ALL]))
+                ->assertOk()
+                ->getContent();
+
+            $order = collect(['SPX-BARU', 'SPX-TENGAH', 'SPX-LAMA'])
+                ->sortBy(fn (string $needle) => strpos($html, $needle))
+                ->values()
+                ->all();
+
+            $this->assertSame(['SPX-BARU', 'SPX-TENGAH', 'SPX-LAMA'], $order, "Urutan salah pada {$route}.");
+        }
     }
 
     /**
@@ -256,7 +324,7 @@ class DateFilterTest extends TestCase
      */
     public function test_a_shortcut_carries_the_other_filters_along(): void
     {
-        $this->makeDocument('outbound', Carbon::parse('2026-08-05'), 'BARU');
+        $this->makeDocument('outbound', Carbon::today(), 'BARU');
 
         $response = $this->actingAs($this->admin)
             ->get(route('admin.outbounds.index', ['search' => 'BARU', 'status' => 'draft']))

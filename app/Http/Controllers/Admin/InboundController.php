@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\DateRange;
 use App\Http\Requests\Admin\StoreInboundRequest;
 use App\Http\Requests\Admin\UpdateInboundRequest;
 use App\Models\Inbound;
@@ -44,7 +45,7 @@ class InboundController extends Controller implements HasMiddleware
             ->withSum('items', 'quantity')
             ->search($request->string('search')->trim()->value())
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
-            ->dateBetween($request->input('from'), $request->input('to'))
+            ->dateBetween(DateRange::fromRequest($request))
             ->latest('date')
             ->latest('id')
             ->paginate(10)

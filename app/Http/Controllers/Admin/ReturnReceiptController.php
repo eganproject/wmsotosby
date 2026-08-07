@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\DateRange;
 use App\Http\Requests\Admin\StoreReturnReceiptRequest;
 use App\Http\Requests\Admin\UpdateReturnReceiptRequest;
 use App\Models\Outbound;
@@ -46,7 +47,7 @@ class ReturnReceiptController extends Controller implements HasMiddleware
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->when($request->filled('type'), fn ($query) => $query->where('type', $request->string('type')))
             ->when($request->filled('marketplace'), fn ($query) => $query->where('marketplace', $request->string('marketplace')))
-            ->dateBetween($request->input('from'), $request->input('to'))
+            ->dateBetween(DateRange::fromRequest($request))
             ->latest('date')
             ->latest('id')
             ->paginate(10)

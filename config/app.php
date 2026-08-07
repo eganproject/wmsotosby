@@ -65,7 +65,17 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    /*
+     * Gudangnya di Indonesia, jadi "hari ini" harus berarti hari ini di sana.
+     *
+     * Sebelumnya UTC, dan itu membuat setiap hitungan hari meleset tujuh jam:
+     * antara tengah malam sampai pukul tujuh pagi WIB, tanggal bawaan pada form
+     * dan saringan "hari berjalan" masih menunjuk hari kemarin.
+     *
+     * Kolom tanggal dokumen bertipe DATE sehingga tidak tersentuh perubahan ini;
+     * yang bergeser hanya cara jam pada stempel waktu dibaca.
+     */
+    'timezone' => env('APP_TIMEZONE', 'Asia/Jakarta'),
 
     /*
     |--------------------------------------------------------------------------

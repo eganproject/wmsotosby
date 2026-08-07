@@ -374,22 +374,39 @@ class ShipmentOrder extends Model
     }
 
     /**
-     * Disaring menurut tanggal pesanan.
+     * Tanggal yang mewakili sebuah pesanan.
      *
      * Eksport Ginee tidak selalu menyertakan kolom tanggal, dan pesanan tanpa
      * tanggal akan lenyap seluruhnya begitu saringan dinyalakan — jawaban yang
      * salah tanpa satu pun petunjuk. Yang kosong karena itu memakai waktu
      * berkasnya masuk ke sistem.
      */
-    public function scopeDateBetween(Builder $query, ?string $from, ?string $to): Builder
-    {
-        $column = 'DATE(COALESCE(order_date, shipment_orders.created_at))';
+    protected const EFFECTIVE_DATE = 'DATE(COALESCE(order_date, shipment_orders.created_at))';
 
+    /**
+     * Disaring menurut tanggal pesanan.
+     */
+    public function scopeDateBetween(Builder $query, \App\Support\DateRange $range): Builder
+    {
         return $query
-            ->when(static::dateFilterValue($from), fn (Builder $query, string $date) => $query
-                ->whereRaw("{$column} >= ?", [$date]))
-            ->when(static::dateFilterValue($to), fn (Builder $query, string $date) => $query
-                ->whereRaw("{$column} <= ?", [$date]));
+            ->when(static::dateFilterValue($range->from), fn (Builder $query, string $date) => $query
+                ->whereRaw(self::EFFECTIVE_DATE.' >= ?', [$date]))
+            ->when(static::dateFilterValue($range->to), fn (Builder $query, string $date) => $query
+                ->whereRaw(self::EFFECTIVE_DATE.' <= ?', [$date]));
+    }
+
+    /**
+     * Terbaru lebih dulu, menurut tanggal yang sama dengan yang dipakai
+     * saringannya.
+     *
+     * Sebelumnya daftar resi diurutkan menurut nomor barisnya, yang berarti
+     * urutan masuknya berkas import — bukan urutan pesanannya. Menyaring
+     * menurut satu tanggal lalu mengurutkan menurut hal lain membuat halaman
+     * pertama tidak berisi yang paling baru.
+     */
+    public function scopeLatestFirst(Builder $query): Builder
+    {
+        return $query->orderByRaw(self::EFFECTIVE_DATE.' DESC')->orderByDesc('shipment_orders.id');
     }
 
     public function scopeSearch(Builder $query, ?string $term): Builder

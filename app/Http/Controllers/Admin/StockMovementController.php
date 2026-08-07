@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\DateRange;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Services\StockMovementExportService;
@@ -69,14 +70,19 @@ class StockMovementController extends Controller implements HasMiddleware
      */
     protected function filtered(Request $request): Builder
     {
+        // Rentangnya lewat resolusi yang sama dengan daftar lain: bawaannya
+        // hari berjalan, dan masukan yang tidak terbaca diabaikan alih-alih
+        // menjatuhkan halaman.
+        $range = DateRange::fromRequest($request);
+
         return StockMovement::query()
             ->search($request->string('search')->trim()->value())
             ->fromSource($request->string('source')->value())
             ->inBucket($request->string('bucket')->value())
             ->when($request->filled('product_id'), fn ($query) => $query->where('product_id', $request->integer('product_id')))
             ->when(in_array($request->input('type'), ['in', 'out'], true), fn ($query) => $query->where('type', $request->input('type')))
-            ->when($request->filled('from'), fn ($query) => $query->whereDate('created_at', '>=', $request->date('from')))
-            ->when($request->filled('to'), fn ($query) => $query->whereDate('created_at', '<=', $request->date('to')));
+            ->when($range->from, fn ($query, $date) => $query->whereDate('created_at', '>=', $date))
+            ->when($range->to, fn ($query, $date) => $query->whereDate('created_at', '<=', $date));
     }
 
     /**

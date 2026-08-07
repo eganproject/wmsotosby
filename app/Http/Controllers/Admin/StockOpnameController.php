@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\DateRange;
 use App\Models\Product;
 use App\Models\StockOpname;
 use App\Models\StockOpnameItem;
@@ -54,7 +55,7 @@ class StockOpnameController extends Controller implements HasMiddleware
             ])
             ->search($request->string('search')->trim()->value())
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
-            ->dateBetween($request->input('from'), $request->input('to'))
+            ->dateBetween(DateRange::fromRequest($request))
             ->latest('date')
             ->latest('id')
             ->paginate(10)

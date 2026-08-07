@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\DateRange;
 use App\Models\ShipmentOrder;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -48,8 +49,8 @@ class WaybillStatusController extends Controller implements HasMiddleware
             ->atStage($stage)
             ->search($request->string('search')->trim()->value())
             ->when($request->filled('courier'), fn ($query) => $query->where('courier', $request->string('courier')))
-            ->dateBetween($request->input('from'), $request->input('to'))
-            ->latest('id')
+            ->dateBetween(DateRange::fromRequest($request))
+            ->latestFirst()
             ->paginate(20)
             ->withQueryString();
 
