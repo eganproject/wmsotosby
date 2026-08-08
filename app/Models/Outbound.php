@@ -21,6 +21,20 @@ class Outbound extends Model
 
     public const TYPE_MARKETPLACE = 'marketplace';
 
+    /* ----------------------------------------------------------- tahapan -- */
+
+    /** Resi paket belum dicocokkan di stasiun packing. */
+    public const STAGE_NEED_RESI = 'perlu_resi';
+
+    /** Resi sudah cocok, tetapi dokumennya tidak punya baris barang. */
+    public const STAGE_NEED_ITEMS = 'perlu_barang';
+
+    /** Isi paket sedang diperiksa satu per satu. */
+    public const STAGE_SCANNING = 'scan_barang';
+
+    /** Lengkap discan, menunggu diserahkan ke kurir. */
+    public const STAGE_READY = 'siap_kirim';
+
     protected $fillable = [
         'code',
         'date',
@@ -98,14 +112,36 @@ class Outbound extends Model
         return $this->items->every(fn (OutboundItem $item) => $item->isFullyScanned());
     }
 
+    /**
+     * Unit yang diminta dokumen.
+     *
+     * Hasil withSum dipakai bila ada, supaya daftar tidak perlu memuat baris
+     * barang satu per satu hanya untuk menghitung badge.
+     */
     public function totalQuantity(): int
     {
-        return (int) $this->items->sum('quantity');
+        return $this->summed('items_sum_quantity', 'quantity');
     }
 
     public function totalScanned(): int
     {
-        return (int) $this->items->sum('scanned_quantity');
+        return $this->summed('items_sum_scanned_quantity', 'scanned_quantity');
+    }
+
+    /**
+     * Baca hasil withSum bila kuerinya memang memintanya.
+     *
+     * Keberadaan kuncinya yang diperiksa, bukan nilainya: dokumen tanpa baris
+     * barang menghasilkan null, dan `??` akan menganggapnya belum dihitung lalu
+     * memuat relasinya satu per satu — persis N+1 yang withSum hindari.
+     */
+    protected function summed(string $aggregate, string $column): int
+    {
+        if (array_key_exists($aggregate, $this->attributes)) {
+            return (int) $this->attributes[$aggregate];
+        }
+
+        return (int) $this->items->sum($column);
     }
 
     public function scanPercentage(): int
@@ -144,6 +180,93 @@ class Outbound extends Model
     public function isReadyToPost(): bool
     {
         return $this->postingBlockers() === [];
+    }
+
+    /* ----------------------------------------------------------- tahapan -- */
+
+    /**
+     * Tahap yang sedang dijalani dokumen — bukan sekadar nilai kolom status.
+     *
+     * Kolom status hanya mengenal draft, diajukan, ditolak, dan diposting.
+     * Bagi paket marketplace itu terlalu kasar: satu kata "draft" dipakai
+     * bersama oleh paket yang belum disentuh sama sekali dan paket yang sudah
+     * selesai QC dan sedang mengantre di Siap Dikirim. Keduanya menuntut
+     * tindakan yang sama sekali berbeda, jadi keduanya harus punya nama sendiri.
+     *
+     * Urutannya penting: keputusan penyetuju selalu didahulukan, supaya
+     * penolakan tidak tertutup oleh tahap pemindaian.
+     */
+    public function stage(): string
+    {
+        return match (true) {
+            $this->isPosted() => self::STATUS_POSTED,
+            $this->isPending() => self::STATUS_PENDING,
+            $this->isRejected() => self::STATUS_REJECTED,
+            ! $this->isMarketplace() => self::STATUS_DRAFT,
+            ! $this->isResiVerified() => self::STAGE_NEED_RESI,
+            $this->totalQuantity() < 1 => self::STAGE_NEED_ITEMS,
+            $this->totalScanned() < $this->totalQuantity() => self::STAGE_SCANNING,
+            default => self::STAGE_READY,
+        };
+    }
+
+    /**
+     * Nama, warna, dan ikon setiap tahap.
+     *
+     * @return array<string, array{label: string, variant: string, icon: string}>
+     */
+    public static function stages(): array
+    {
+        return [
+            self::STATUS_DRAFT => ['label' => 'Draft', 'variant' => 'neutral', 'icon' => 'document'],
+            self::STAGE_NEED_RESI => ['label' => 'Perlu scan resi', 'variant' => 'neutral', 'icon' => 'key'],
+            self::STAGE_NEED_ITEMS => ['label' => 'Belum ada barang', 'variant' => 'danger', 'icon' => 'warning'],
+            self::STAGE_SCANNING => ['label' => 'Scan barang', 'variant' => 'warning', 'icon' => 'key'],
+            self::STAGE_READY => ['label' => 'Siap dikirim', 'variant' => 'dark', 'icon' => 'box'],
+            self::STATUS_PENDING => ['label' => 'Menunggu persetujuan', 'variant' => 'warning', 'icon' => 'clock'],
+            self::STATUS_REJECTED => ['label' => 'Ditolak', 'variant' => 'danger', 'icon' => 'x-circle'],
+            self::STATUS_POSTED => ['label' => 'Terkirim', 'variant' => 'success', 'icon' => 'check-circle'],
+        ];
+    }
+
+    public function stageLabel(): string
+    {
+        return self::stages()[$this->stage()]['label'];
+    }
+
+    public function stageVariant(): string
+    {
+        return self::stages()[$this->stage()]['variant'];
+    }
+
+    public function stageIcon(): string
+    {
+        return self::stages()[$this->stage()]['icon'];
+    }
+
+    /**
+     * Saring menurut tahap.
+     *
+     * Setiap pilihan saringan menunjuk tepat satu badge, tanpa tumpang tindih —
+     * "Draft" tidak lagi ikut memuat paket marketplace yang sebenarnya sudah
+     * siap dikirim.
+     */
+    public function scopeAtStage(Builder $query, ?string $stage): Builder
+    {
+        return match ($stage) {
+            self::STATUS_DRAFT => $query->where('status', self::STATUS_DRAFT)
+                ->where('type', self::TYPE_REGULAR),
+            self::STAGE_NEED_RESI => $query->stillScanning()->whereNull('resi_verified_at'),
+            self::STAGE_NEED_ITEMS => $query->stillScanning()
+                ->whereNotNull('resi_verified_at')
+                ->whereDoesntHave('items'),
+            self::STAGE_SCANNING => $query->stillScanning()
+                ->whereNotNull('resi_verified_at')
+                ->whereHas('items'),
+            self::STAGE_READY => $query->readyToShip(),
+            self::STATUS_PENDING, self::STATUS_REJECTED, self::STATUS_POSTED => $query->where('status', $stage),
+            default => $query,
+        };
     }
 
     /**

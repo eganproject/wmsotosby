@@ -34,10 +34,16 @@
                 @endforeach
             </x-ui.select>
 
-            <x-ui.select name="status" class="sm:w-36">
+            {{-- Pilihannya persis sama dengan badge di kolom Status, satu lawan
+                 satu. Sebelumnya hanya ada Draft dan Terkirim, sehingga paket
+                 yang menunggu persetujuan atau ditolak tidak bisa dicari sama
+                 sekali, dan "Draft" ikut memuat paket yang sebenarnya sudah
+                 siap dikirim. --}}
+            <x-ui.select name="status" class="col-span-2 sm:col-span-1 sm:w-48">
                 <option value="">Semua status</option>
-                <option value="draft" @selected(request('status') === 'draft')>Draft</option>
-                <option value="posted" @selected(request('status') === 'posted')>Terkirim</option>
+                @foreach (App\Models\Outbound::stages() as $value => $stage)
+                    <option value="{{ $value }}" @selected(request('status') === $value)>{{ $stage['label'] }}</option>
+                @endforeach
             </x-ui.select>
         </div>
 
@@ -104,15 +110,10 @@
                                     {{ number_format((int) $outbound->items_sum_quantity, 0, ',', '.') }}
                                 </td>
                                 <td class="px-6 py-4">
-                                    @if ($outbound->isEditable() && $outbound->isMarketplace() && ! $outbound->isResiVerified())
-                                        <x-ui.badge variant="neutral" icon="key">Perlu scan resi</x-ui.badge>
-                                    @elseif ($outbound->isEditable() && $outbound->isMarketplace() && (int) $outbound->items_sum_scanned_quantity < (int) $outbound->items_sum_quantity)
-                                        <x-ui.badge variant="warning" icon="key">Scan barang</x-ui.badge>
-                                    @else
-                                        <x-ui.badge :variant="$outbound->statusVariant()" :icon="$outbound->statusIcon()">
-                                            {{ $outbound->statusLabel() }}
-                                        </x-ui.badge>
-                                    @endif
+                                    {{-- Tahap, bukan kolom status: lihat Outbound::stage(). --}}
+                                    <x-ui.badge :variant="$outbound->stageVariant()" :icon="$outbound->stageIcon()">
+                                        {{ $outbound->stageLabel() }}
+                                    </x-ui.badge>
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="flex items-center justify-end gap-1">
@@ -161,7 +162,12 @@
                                     {{ $outbound->date->translatedFormat('d M Y') }} &middot; {{ $outbound->recipient }}
                                 </p>
                             </div>
-                            <x-ui.badge :variant="$outbound->statusVariant()">{{ $outbound->statusLabel() }}</x-ui.badge>
+                            {{-- Badge yang sama persis dengan tabel: dokumen yang
+                                 sama tidak boleh bercerita berbeda hanya karena
+                                 layarnya lebih sempit. --}}
+                            <x-ui.badge :variant="$outbound->stageVariant()" :icon="$outbound->stageIcon()">
+                                {{ $outbound->stageLabel() }}
+                            </x-ui.badge>
                         </div>
 
                         <div class="mt-2 flex flex-wrap items-center gap-1.5">

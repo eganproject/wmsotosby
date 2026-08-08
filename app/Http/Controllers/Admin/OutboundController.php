@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -45,7 +46,7 @@ class OutboundController extends Controller implements HasMiddleware
             // perlu dimuat satu per satu hanya untuk menampilkan badge.
             ->withSum('items', 'scanned_quantity')
             ->search($request->string('search')->trim()->value())
-            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
+            ->when($request->filled('status'), fn ($query) => $query->atStage($request->string('status')->value()))
             ->when($request->filled('type'), fn ($query) => $query->where('type', $request->string('type')))
             ->when($request->filled('marketplace'), fn ($query) => $query->where('marketplace', $request->string('marketplace')))
             ->dateBetween(DateRange::fromRequest($request))
@@ -129,10 +130,12 @@ class OutboundController extends Controller implements HasMiddleware
                     : 'Dokumen yang sudah disetujui bersifat final dan tidak dapat diubah.');
         }
 
+        $outbound->load('items.product');
+
         return view('admin.outbounds.edit', [
-            'outbound' => $outbound->load('items.product'),
+            'outbound' => $outbound,
             'code' => $outbound->code,
-            'products' => $this->products(),
+            'products' => $this->products($outbound),
             'marketplaces' => Outbound::marketplaces(),
             'defaultType' => $outbound->type,
         ]);
@@ -147,9 +150,12 @@ class OutboundController extends Controller implements HasMiddleware
         }
 
         $data = $request->validated();
-        $trackingChanged = ($data['tracking_number'] ?? null) !== $outbound->tracking_number;
 
-        DB::transaction(function () use ($outbound, $data, $trackingChanged) {
+        // Dibaca sebelum update(): setelahnya nilai lamanya sudah tersapu.
+        $trackingChanged = ($data['tracking_number'] ?? null) !== $outbound->tracking_number;
+        $typeChanged = $data['type'] !== $outbound->type;
+
+        DB::transaction(function () use ($outbound, $data, $trackingChanged, $typeChanged) {
             $outbound->update([
                 'date' => $data['date'],
                 'type' => $data['type'],
@@ -159,11 +165,20 @@ class OutboundController extends Controller implements HasMiddleware
                 'note' => $data['note'] ?? null,
             ]);
 
-            $outbound->items()->delete();
-            $outbound->items()->createMany($this->mergeLines($data['items'] ?? []));
+            // Baris barang selalu ditulis ulang seluruhnya, jadi hasil scan yang
+            // masih sahih harus diselamatkan lebih dulu. Tanpa ini setiap
+            // penyimpanan — termasuk yang tidak mengubah apa pun — memulangkan
+            // paket yang sudah selesai QC ke titik nol, dan paket itu diam-diam
+            // hilang dari antrean Siap Dikirim.
+            $scanned = $outbound->items()->pluck('scanned_quantity', 'product_id');
 
-            // Isi dokumen berubah, jadi hasil scan sebelumnya tidak lagi sahih.
-            if ($trackingChanged || $outbound->isMarketplace()) {
+            $outbound->items()->delete();
+            $outbound->items()->createMany($this->mergeLines($data['items'] ?? [], $scanned));
+
+            // Verifikasi resi berlaku atas satu nomor tertentu, jadi hanya nomor
+            // yang berganti — atau dokumen yang berpindah jenis — yang
+            // membatalkannya. Mengetik ulang catatan tidak.
+            if ($trackingChanged || $typeChanged) {
                 $outbound->forceFill(['resi_verified_at' => null])->save();
             }
         });
@@ -171,7 +186,9 @@ class OutboundController extends Controller implements HasMiddleware
         if ($outbound->refresh()->isMarketplace()) {
             return redirect()
                 ->route('admin.outbounds.scan', $outbound)
-                ->with('success', "Dokumen {$outbound->code} diperbarui. Verifikasi scan diulang dari awal.");
+                ->with('success', "Dokumen {$outbound->code} diperbarui. ".($trackingChanged
+                    ? 'Nomor resi berganti, jadi verifikasinya diulang dari awal.'
+                    : 'Hasil scan yang masih cocok tetap tersimpan.'));
         }
 
         return redirect()
@@ -249,24 +266,41 @@ class OutboundController extends Controller implements HasMiddleware
 
     /**
      * @param  array<int, array<string, mixed>>  $lines
+     * @param  \Illuminate\Support\Collection<int, int>|null  $scanned  hasil scan per barang yang masih boleh dipertahankan
      * @return array<int, array<string, mixed>>
      */
-    protected function mergeLines(array $lines): array
+    protected function mergeLines(array $lines, ?Collection $scanned = null): array
     {
         return collect($lines)
             ->groupBy('product_id')
-            ->map(fn ($group, $productId) => [
-                'product_id' => (int) $productId,
-                'quantity' => (int) $group->sum('quantity'),
-                'scanned_quantity' => 0,
-                'note' => $group->pluck('note')->filter()->implode(', ') ?: null,
-            ])
+            ->map(function ($group, $productId) use ($scanned) {
+                $quantity = (int) $group->sum('quantity');
+
+                return [
+                    'product_id' => (int) $productId,
+                    'quantity' => $quantity,
+                    // Tidak pernah melebihi jumlah yang diminta: baris yang
+                    // jumlahnya dikurangi tidak boleh tampak lebih dari selesai.
+                    'scanned_quantity' => min((int) ($scanned[$productId] ?? 0), $quantity),
+                    'note' => $group->pluck('note')->filter()->implode(', ') ?: null,
+                ];
+            })
             ->values()
             ->all();
     }
 
-    protected function products()
+    /**
+     * Katalog barang untuk editor baris.
+     *
+     * Barang yang sudah dinonaktifkan tetapi masih tercantum di dokumen tetap
+     * ikut. Tanpa pilihannya, dropdown baris itu jatuh ke kosong dan barisnya
+     * lenyap tanpa suara begitu dokumen disimpan ulang.
+     */
+    protected function products(?Outbound $outbound = null)
     {
-        return Product::where('is_active', true)->orderBy('name')->get();
+        return Product::where('is_active', true)
+            ->when($outbound, fn ($query) => $query->orWhereIn('id', $outbound->items->pluck('product_id')))
+            ->orderBy('name')
+            ->get();
     }
 }

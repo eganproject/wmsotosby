@@ -98,11 +98,15 @@
                 <template x-if="type === 'marketplace'">
                     <div>
                         <x-ui.button type="submit" icon="search" class="w-full">
-                            Simpan &amp; Mulai Scan
+                            {{ $isEdit ? 'Simpan & Lanjut Scan' : 'Simpan & Mulai Scan' }}
                         </x-ui.button>
                         <p class="mt-3 flex items-start gap-2 rounded-xl bg-ink-950 p-3 text-[11px] leading-relaxed text-white/70">
                             <x-icon name="shield" class="mt-px h-3.5 w-3.5 shrink-0 text-white" />
-                            Pesanan marketplace tidak bisa langsung diproses. Setelah disimpan, Anda diarahkan ke halaman verifikasi untuk scan resi lalu scan barang.
+                            @if ($isEdit)
+                                Setelah disimpan, Anda kembali ke halaman verifikasi. Hasil scan yang masih cocok tetap tersimpan; hanya baris yang berubah — dan resi bila nomornya diganti — yang perlu diulang.
+                            @else
+                                Pesanan marketplace tidak bisa langsung diproses. Setelah disimpan, Anda diarahkan ke halaman verifikasi untuk scan resi lalu scan barang.
+                            @endif
                         </p>
                     </div>
                 </template>
