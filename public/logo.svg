@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 80" fill="none">
+    <!--
+        Favicon. Sama dengan komponen application-logo, hanya diberi ruang
+        kosong di sekelilingnya supaya marknya tidak menempel ke tepi saat
+        peramban mengecilkannya menjadi 16 piksel.
+    -->
+    <path d="M57.1 22.2A24 24 0 1 0 57.1 57.8" stroke="#1B2A6B" stroke-width="14"/>
+    <circle cx="86" cy="40" r="11" fill="#F5A623"/>
+    <path d="M105 9V71" stroke="#1B2A6B" stroke-width="13"/>
+    <path d="M111 40L134 13M111 40L134 67" stroke="#1B2A6B" stroke-width="13"/>
+</svg>

@@ -7,6 +7,10 @@
 
     <title>{{ $title ? $title.' — '.config('app.name', 'WMS') : config('app.name', 'WMS') }}</title>
 
+    {{-- SVG tetap tajam di layar rapat; favicon.ico dibiarkan sebagai cadangan
+         untuk peramban lama yang belum mengenalnya. --}}
+    <link rel="icon" href="{{ asset('logo.svg') }}" type="image/svg+xml">
+
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap" rel="stylesheet" />
 
@@ -24,8 +28,8 @@
         <div class="pointer-events-none absolute -bottom-32 -right-20 h-96 w-96 rounded-full bg-white/5 blur-3xl"></div>
 
         <div class="relative flex items-center gap-3">
-            <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-ink-950">
-                <x-application-logo class="h-6 w-6" />
+            <span class="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-2xl bg-white">
+                <x-application-logo class="h-5 w-11" />
             </span>
             <div>
                 <p class="text-base font-semibold tracking-tight text-white">{{ config('app.name', 'WMS Otosby') }}</p>
@@ -69,8 +73,8 @@
     <div class="flex flex-1 flex-col justify-center bg-white px-5 py-10 sm:px-8 lg:px-12 xl:px-20">
         <div class="mx-auto w-full max-w-md animate-fade-in">
             <div class="mb-8 flex items-center gap-3 lg:hidden">
-                <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-ink-950 text-white">
-                    <x-application-logo class="h-5 w-5" />
+                <span class="inline-flex h-10 w-14 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-inset ring-ink-200">
+                    <x-application-logo class="h-4 w-10" />
                 </span>
                 <div>
                     <p class="text-sm font-semibold tracking-tight text-ink-950">{{ config('app.name', 'WMS Otosby') }}</p>

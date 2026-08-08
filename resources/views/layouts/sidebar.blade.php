@@ -5,8 +5,10 @@
 <div class="flex h-full flex-col bg-white">
     {{-- Brand --}}
     <div class="flex h-16 shrink-0 items-center gap-3 border-b border-ink-100 px-5">
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-ink-950 text-white">
-            <x-application-logo class="h-5 w-5" />
+        {{-- Alas terang: lambangnya berwarna merek, dan navy di atas alas
+             hampir hitam praktis tidak terlihat. --}}
+        <span class="inline-flex h-9 w-12 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-inset ring-ink-200">
+            <x-application-logo class="h-4 w-9" />
         </span>
         <div class="min-w-0">
             <p class="truncate text-sm font-semibold tracking-tight text-ink-950">{{ config('app.name', 'WMS Otosby') }}</p>

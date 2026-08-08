@@ -30,13 +30,4 @@
 
         <x-ui.button type="submit" size="lg" class="w-full" icon="login">Masuk</x-ui.button>
     </form>
-
-    <div class="mt-10 rounded-2xl border border-ink-100 bg-ink-50/60 p-4">
-        <p class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-400">
-            <x-icon name="sparkles" class="h-3.5 w-3.5" /> Akun demo
-        </p>
-        <p class="mt-2 text-sm text-ink-600">
-            <span class="font-medium text-ink-950">admin@wmsotosby.test</span> / <span class="font-medium text-ink-950">password</span>
-        </p>
-    </div>
 </x-guest-layout>
