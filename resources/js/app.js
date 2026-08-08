@@ -12,6 +12,7 @@ import productBulkEdit from './product-bulk-edit';
 import resiLookup from './resi-lookup';
 import returnStation from './return-station';
 import documentScanner from './scanner';
+import stockPicker from './stock-picker';
 
 window.Alpine = Alpine;
 
@@ -25,5 +26,6 @@ Alpine.data('productBulkEdit', productBulkEdit);
 Alpine.data('resiLookup', resiLookup);
 Alpine.data('returnStation', returnStation);
 Alpine.data('documentScanner', documentScanner);
+Alpine.data('stockPicker', stockPicker);
 
 Alpine.start();

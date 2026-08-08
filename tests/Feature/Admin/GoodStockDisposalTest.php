@@ -226,6 +226,85 @@ class GoodStockDisposalTest extends TestCase
             ->assertDontSee('Dipindahkan ke stok rusak');
     }
 
+    /**
+     * Barangnya dicari, bukan digulir.
+     *
+     * Form lamanya menuliskan satu baris input untuk setiap barang bersaldo,
+     * jadi gudang dengan seribu SKU berarti seribu kotak kosong yang harus
+     * dilewati hanya untuk mengeluarkan satu barang.
+     */
+    public function test_the_form_does_not_render_a_row_for_every_product(): void
+    {
+        foreach (range(1, 5) as $index) {
+            $product = Product::create([
+                'sku' => "BAN-{$index}", 'name' => "Ban Nomor {$index}",
+                'unit' => 'pcs', 'min_stock' => 0,
+            ]);
+            $product->forceFill(['stock' => 10]);
+            $product->save();
+        }
+
+        $html = $this->actingAs($this->admin)
+            ->get(route('admin.disposals.create', ['bucket' => 'good']))
+            ->assertOk()
+            ->getContent();
+
+        // Tidak ada satu pun kolom jumlah yang dirender server: barisnya baru
+        // muncul setelah barangnya benar-benar dipilih.
+        $this->assertSame(0, substr_count($html, 'name="quantities['));
+        $this->assertStringContainsString('stockPicker(', $html);
+    }
+
+    /** Katalognya tetap lengkap — yang berubah hanya cara menampilkannya. */
+    public function test_the_form_carries_every_product_with_a_balance(): void
+    {
+        $other = Product::create([
+            'sku' => 'BAN-RING-14', 'name' => 'Ban Ring 14',
+            'unit' => 'pcs', 'min_stock' => 0,
+        ]);
+        $other->forceFill(['stock' => 7]);
+        $other->save();
+
+        $empty = Product::create([
+            'sku' => 'AKI-KOSONG', 'name' => 'Aki Tanpa Saldo',
+            'unit' => 'pcs', 'min_stock' => 0,
+        ]);
+
+        $html = $this->actingAs($this->admin)
+            ->get(route('admin.disposals.create', ['bucket' => 'good']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('BAN-RING-14', $html);
+        $this->assertStringContainsString('FLT-OLI-STD', $html);
+        $this->assertStringNotContainsString('AKI-KOSONG', $html, 'Barang tanpa saldo tidak bisa dikeluarkan.');
+        $this->assertSame(0, $empty->refresh()->stock);
+    }
+
+    /** Isian yang ditolak validasi harus kembali, bukan hilang. */
+    public function test_a_rejected_form_comes_back_with_the_chosen_rows(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.disposals.store'), [
+                'date' => now()->toDateString(),
+                'bucket' => StockMovement::BUCKET_GOOD,
+                'action' => DamagedDisposal::ACTION_DISCARD,
+                'quantities' => [$this->product->id => 80],
+            ])
+            ->assertSessionHasErrors('quantities');
+
+        $html = $this->actingAs($this->admin)
+            ->get(route('admin.disposals.create', ['bucket' => 'good']))
+            ->assertOk()
+            ->getContent();
+
+        // Js::from menulis tanda kutip dalam bentuk lolos supaya aman berada di
+        // dalam atribut HTML, jadi bandingkan dengan bentuk yang sama.
+        $quote = '\\u0022';
+
+        $this->assertStringContainsString($quote.$this->product->id.$quote.':80', $html);
+    }
+
     /* --------------------------------------------------- helpers --------- */
 
     protected function make(string $action, int $quantity, string $bucket = StockMovement::BUCKET_GOOD, array $extra = []): DamagedDisposal
