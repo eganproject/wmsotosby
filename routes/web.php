@@ -12,20 +12,21 @@ use App\Http\Controllers\Admin\OutboundScanController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductImportController;
+use App\Http\Controllers\Admin\RestockReportController;
 use App\Http\Controllers\Admin\ReturnMarketplaceController;
 use App\Http\Controllers\Admin\ReturnReceiptController;
-use App\Http\Controllers\Admin\RestockReportController;
 use App\Http\Controllers\Admin\ReturnScanController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\ShipmentImportController;
 use App\Http\Controllers\Admin\ShipmentOrderCancellationController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
+use App\Http\Controllers\Admin\StockApiAllowedIpController;
 use App\Http\Controllers\Admin\StockMovementController;
 use App\Http\Controllers\Admin\StockOpnameController;
 use App\Http\Controllers\Admin\StockReportController;
 use App\Http\Controllers\Admin\SupplierController;
-use App\Http\Controllers\Admin\WaybillStatusController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\WaybillStatusController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -123,6 +124,11 @@ Route::middleware('auth')
         // Manajemen akses
         Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
         Route::put('permissions', [PermissionController::class, 'update'])->name('permissions.update');
+
+        Route::get('stock-api-access', [StockApiAllowedIpController::class, 'index'])->name('stock-api-access.index');
+        Route::post('stock-api-access', [StockApiAllowedIpController::class, 'store'])->name('stock-api-access.store');
+        Route::put('stock-api-access/{stockApiAllowedIp}', [StockApiAllowedIpController::class, 'update'])->name('stock-api-access.update');
+        Route::delete('stock-api-access/{stockApiAllowedIp}', [StockApiAllowedIpController::class, 'destroy'])->name('stock-api-access.destroy');
 
         Route::resource('users', UserController::class);
         Route::resource('roles', RoleController::class)->except('show');

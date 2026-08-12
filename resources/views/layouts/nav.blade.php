@@ -76,7 +76,7 @@
         </div>
     @endcanany
 
-    @canany(['users.view', 'roles.view', 'permissions.view'])
+    @canany(['users.view', 'roles.view', 'permissions.view', 'stock-api-access.view'])
         <div class="space-y-1">
             <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Pengaturan</p>
 

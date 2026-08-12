@@ -2,8 +2,13 @@
 
 namespace App\Providers;
 
+use App\Models\Product;
 use App\Models\User;
+use App\Services\StockApiSyncService;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -22,6 +27,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->registerPermissionGates();
+
+        RateLimiter::for('stock-api', fn (Request $request) => Limit::perMinute(
+            config('stock_api.rate_limit_per_minute')
+        )->by(hash('sha256', (string) $request->bearerToken().'|'.$request->ip())));
+
+        Product::saved(fn (Product $product) => StockApiSyncService::sync($product));
+        Product::deleting(fn (Product $product) => StockApiSyncService::markDeleted($product));
     }
 
     /**

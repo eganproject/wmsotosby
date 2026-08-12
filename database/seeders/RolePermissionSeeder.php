@@ -114,6 +114,11 @@ class RolePermissionSeeder extends Seeder
             'permissions.view' => 'Melihat hak akses',
             'permissions.update' => 'Mengatur hak akses role',
         ],
+        'API Stok' => [
+            'stock-api-access.view' => 'Melihat daftar IP API stok',
+            'stock-api-access.update' => 'Menambah dan mengubah IP API stok',
+            'stock-api-access.delete' => 'Menghapus IP API stok',
+        ],
     ];
 
     public function run(): void

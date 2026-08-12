@@ -77,6 +77,8 @@ class SectionTabs
                     'match' => 'admin.roles.*', 'can' => 'roles.view'],
                 ['label' => 'Hak Akses', 'icon' => 'key', 'route' => 'admin.permissions.index',
                     'match' => 'admin.permissions.*', 'can' => 'permissions.view'],
+                ['label' => 'Akses API Stok', 'icon' => 'key', 'route' => 'admin.stock-api-access.index',
+                    'match' => 'admin.stock-api-access.*', 'can' => 'stock-api-access.view'],
             ],
         ];
     }
