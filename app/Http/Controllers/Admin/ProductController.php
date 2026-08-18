@@ -105,6 +105,12 @@ class ProductController extends Controller implements HasMiddleware
             'movements' => $product->isBundle()
                 ? null
                 : $product->movements()->with('user')->paginate(15),
+            // Unit tiap komponen yang sudah dijanjikan lewat dokumen yang
+            // belum diproses. Ditampilkan supaya angka "masih bisa dijanjikan"
+            // bisa ditelusuri sampai ke barang yang membatasinya.
+            'committed' => $product->isBundle()
+                ? Product::committedUnits($product->bundleComponents->pluck('component_id'))
+                : Product::committedUnits([$product->id]),
         ]);
     }
 

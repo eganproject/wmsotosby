@@ -167,7 +167,8 @@ class BundleMasterTest extends TestCase
         $this->actingAs($this->admin)->get(route('admin.products.show', $bundle))
             ->assertOk()
             ->assertSee('Isi Paket')
-            ->assertSee('Bisa dirakit sekarang')
+            ->assertSee('Masih bisa dijanjikan')
+            ->assertSee('Dijanjikan')
             ->assertSee('4 paket')
             ->assertDontSee('Kartu Stok');
 
@@ -291,9 +292,11 @@ class BundleMasterTest extends TestCase
 
         $response->assertOk()
             ->assertSee('PKT-SERVIS')
-            ->assertSee('1 paket bundling')
+            // Paket punya kartu ringkasannya sendiri, supaya kartu dan tabel
+            // tidak bercerita beda.
+            ->assertSee('Paket Bundling')
             // min(⌊9/2⌋, ⌊40/1⌋) = 4, bukan stok kolomnya yang nol.
-            ->assertSee('dari komponen');
+            ->assertSee('bisa dijanjikan');
 
         $response->assertViewHas('summary', fn (array $summary) => $summary['total'] === 2
             && $summary['bundles'] === 1
@@ -425,6 +428,102 @@ class BundleMasterTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertDatabaseHas('products', ['id' => $bundle->id]);
+    }
+
+    public function test_a_dash_from_our_own_export_is_read_as_empty(): void
+    {
+        /*
+            Berkas ekspor menulis "-" pada kolom yang memang kosong. Importer
+            dulu membacanya sebagai nilai sungguhan, jadi alur paling lazim —
+            unduh, sunting beberapa baris, unggah lagi — mengubah setiap barang
+            tanpa kategori menjadi berkategori "-", dan memberi barcode "-"
+            kepada barang yang tidak punya barcode.
+        */
+        $this->uploadCsv([
+            ['SKU', 'Nama Barang', 'Satuan', 'Barcode', 'Kategori', 'Lokasi Rak'],
+            ['OLI-MTC-1L', 'Oli Matic 1L', 'pcs', '-', '-', '-'],
+            ['FLT-OLI-STD', 'Filter Oli', 'pcs', '-', '-', '-'],
+        ])->assertRedirect(route('admin.products.index'));
+
+        foreach ([$this->oli, $this->filter] as $product) {
+            $product->refresh();
+
+            $this->assertNull($product->barcode, "{$product->sku} mendapat barcode dari tanda hubung.");
+            $this->assertNull($product->category);
+            $this->assertNull($product->location);
+        }
+    }
+
+    public function test_the_placeholder_repair_command_reports_before_it_writes(): void
+    {
+        // Persis bentuk yang ditinggalkan import lama.
+        $this->oli->forceFill(['category' => '-', 'location' => '-'])->save();
+        $this->filter->forceFill(['barcode' => '—'])->save();
+
+        $this->artisan('products:clear-placeholders')
+            ->expectsOutputToContain('OLI-MTC-1L')
+            ->expectsOutputToContain('Belum ada yang diubah')
+            ->assertSuccessful();
+
+        $this->assertSame('-', $this->oli->refresh()->category);
+
+        $this->artisan('products:clear-placeholders', ['--apply' => true])->assertSuccessful();
+
+        $this->assertNull($this->oli->refresh()->category);
+        $this->assertNull($this->oli->location);
+        $this->assertNull($this->filter->refresh()->barcode);
+    }
+
+    public function test_the_repair_command_leaves_real_values_alone(): void
+    {
+        // Tanda hubung sebagai bagian dari kalimat jelas ditulis orang.
+        $this->oli->forceFill(['category' => 'Filter - Oli'])->save();
+
+        $this->artisan('products:clear-placeholders', ['--apply' => true])->assertSuccessful();
+
+        $this->assertSame('Filter - Oli', $this->oli->refresh()->category);
+    }
+
+    /* ------------------------------------------------- ketersediaan ------ */
+
+    public function test_availability_subtracts_what_is_already_promised(): void
+    {
+        $this->give($this->oli, 10);
+        $this->give($this->filter, 10);
+        $bundle = $this->makeBundle('PKT-SERVIS', [[$this->oli, 2], [$this->filter, 1]]);
+
+        $this->assertSame(5, $bundle->refresh()->bundleAvailability());
+
+        // Empat botol oli dijanjikan lewat dokumen yang belum diproses.
+        $outbound = \App\Models\Outbound::create([
+            'code' => \App\Models\Outbound::nextCode(),
+            'date' => now(),
+            'recipient' => 'Pelanggan',
+            'status' => \App\Models\Outbound::STATUS_DRAFT,
+        ]);
+        $outbound->items()->create(['product_id' => $this->oli->id, 'quantity' => 4]);
+
+        // Sisa 6 botol → cukup untuk 3 paket, bukan 5.
+        $this->assertSame(3, $bundle->refresh()->bundleAvailability());
+
+        $this->assertSame(3, (int) Product::withBundleAvailability()
+            ->whereKey($bundle->id)
+            ->firstOrFail()
+            ->bundle_availability);
+    }
+
+    public function test_a_deactivated_bundle_is_not_available(): void
+    {
+        $this->give($this->oli, 10);
+        $bundle = $this->makeBundle('PKT-SERVIS', [[$this->oli, 1]]);
+
+        $this->assertSame(10, $bundle->refresh()->bundleAvailability());
+
+        // Aturannya sama dengan komponen yang dinonaktifkan, supaya keduanya
+        // tidak berbeda pendapat.
+        $bundle->update(['is_active' => false]);
+
+        $this->assertSame(0, $bundle->refresh()->bundleAvailability());
     }
 
     /* ------------------------------------------------- backfill ---------- */

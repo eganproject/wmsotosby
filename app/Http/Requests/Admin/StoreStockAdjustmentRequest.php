@@ -2,13 +2,25 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Admin\Concerns\RejectsBundleLines;
 use App\Models\StockAdjustment;
-use App\Rules\NotABundle;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreStockAdjustmentRequest extends FormRequest
 {
+    use RejectsBundleLines;
+
+    protected function bundleLineAction(): string
+    {
+        return 'penyesuaian stok';
+    }
+
+    public function withValidator(\Illuminate\Contracts\Validation\Validator $validator): void
+    {
+        $validator->after(fn ($validator) => $this->rejectBundleLines($validator));
+    }
+
     public function authorize(): bool
     {
         return $this->user()->can('adjustments.create');
@@ -24,7 +36,7 @@ class StoreStockAdjustmentRequest extends FormRequest
             'reason' => ['required', Rule::in(StockAdjustment::reasons())],
             'note' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id', new NotABundle('penyesuaian stok')],
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.actual_quantity' => ['required', 'integer', 'min:0', 'max:1000000'],
             'items.*.note' => ['nullable', 'string', 'max:255'],
         ];

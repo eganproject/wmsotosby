@@ -258,11 +258,54 @@ class BundleOutboundTest extends TestCase
             ->assertSee('Isi paket yang dirakit')
             ->assertSee('PKT-SERVIS-10K');
 
-        // Ubah dokumen: menyimpan dari sana menghapus keterangan paketnya,
-        // dan itu disebut lebih dulu alih-alih terjadi diam-diam.
+        // Ubah dokumen: paket punya barisnya sendiri, jadi menyuntingnya tidak
+        // berubah menjadi menyunting isinya satu per satu.
         $this->actingAs($this->admin)->get(route('admin.outbounds.edit', $outbound))
             ->assertOk()
-            ->assertSee('1 paket bundling');
+            ->assertSee('Paket Bundling')
+            ->assertSee('PKT-SERVIS-10K');
+    }
+
+    public function test_editing_a_document_keeps_its_packages_intact(): void
+    {
+        $outbound = $this->openPackage([['PKT-SERVIS-10K', 2], ['OLI-MTC-1L', 1]]);
+
+        // Disimpan ulang persis seperti yang ditawarkan form: baris paket, dan
+        // baris barang yang benar-benar dipesan lepas.
+        $this->actingAs($this->admin)->put(route('admin.outbounds.update', $outbound), [
+            'date' => $outbound->date->format('Y-m-d'),
+            'type' => Outbound::TYPE_MARKETPLACE,
+            'recipient' => $outbound->recipient,
+            'marketplace' => 'Shopee',
+            'tracking_number' => 'SPXID111',
+            'bundles' => [['bundle_id' => $this->paket->id, 'quantity' => 2]],
+            'items' => [['product_id' => $this->oli->id, 'quantity' => 1]],
+        ])->assertSessionHasNoErrors();
+
+        $outbound->refresh()->load('items', 'bundles');
+
+        // Keterangan paketnya bertahan, dan barangnya tetap persis sama.
+        $this->assertSame(1, $outbound->bundles->count());
+        $this->assertSame(2, $outbound->bundles->first()->quantity);
+        $this->assertSame(7, $outbound->totalQuantity());
+        $this->assertSame(3, $outbound->items->firstWhere('product_id', $this->oli->id)->quantity);
+    }
+
+    public function test_the_form_offers_only_the_items_ordered_loose(): void
+    {
+        $outbound = $this->openPackage([['PKT-SERVIS-10K', 2], ['OLI-MTC-1L', 1]]);
+
+        /*
+            Baris barang pada form hanya berisi sisa setelah dikurangi apa yang
+            dijanjikan paket. Tanpa pemisahan ini, form menampilkan tiga botol
+            oli di samping baris paket yang juga menjanjikan dua — dan
+            menyimpannya akan menghitung barangnya dua kali.
+        */
+        $loose = $outbound->looseItems();
+
+        $this->assertCount(1, $loose);
+        $this->assertSame($this->oli->id, $loose->first()->product_id);
+        $this->assertSame(1, $loose->first()->quantity);
     }
 
     /* ------------------------------------------------- posting ----------- */
@@ -288,6 +331,31 @@ class BundleOutboundTest extends TestCase
         $this->assertSame(0, $this->paket->refresh()->stock);
         $this->assertSame(0, StockMovement::where('product_id', $this->paket->id)->count());
         $this->assertSame(3, StockMovement::where('type', 'out')->count());
+    }
+
+    public function test_a_bundle_order_travels_through_the_dispatch_queue(): void
+    {
+        $outbound = $this->openPackage([['PKT-SERVIS-10K', 2]]);
+
+        foreach ([['8991234500011', 2], ['8991234500035', 2], ['8991234500042', 2]] as [$barcode, $quantity]) {
+            $this->scanItem($outbound, $barcode, $quantity)->assertOk();
+        }
+
+        // Antrean Siap Dikirim menilai kelengkapan dari baris barang, yang
+        // sudah berupa komponen — paketnya tidak menghalangi.
+        $this->actingAs($this->admin)->get(route('admin.outbounds.ready'))
+            ->assertOk()
+            ->assertSee($outbound->code);
+
+        // Serah ke kurir: resi discan, dokumennya diproses.
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.outbounds.ready.scan'), ['code' => 'SPXID111'])
+            ->assertOk()
+            ->assertJsonPath('shipped', true)
+            ->assertJsonPath('outbound.units', 6);
+
+        $this->assertTrue($outbound->refresh()->isPosted());
+        $this->assertSame(18, $this->oli->refresh()->stock);
     }
 
     public function test_stock_can_never_be_moved_against_a_bundle(): void

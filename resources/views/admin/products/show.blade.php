@@ -40,7 +40,7 @@
                 </div>
 
                 <p class="text-xs font-medium uppercase tracking-wider text-white/50">
-                    {{ $isBundle ? 'Bisa dirakit sekarang' : 'Stok saat ini' }}
+                    {{ $isBundle ? 'Masih bisa dijanjikan' : 'Stok saat ini' }}
                 </p>
                 <p class="mt-2 text-5xl font-semibold tracking-tight">
                     {{ number_format($availability, 0, ',', '.') }}
@@ -57,7 +57,7 @@
                     <x-ui.stock-badge :product="$product" />
                     <span class="text-xs text-white/50">
                         {{ $isBundle
-                            ? 'dihitung dari stok komponen'
+                            ? 'dari stok komponen, dikurangi pesanan berjalan'
                             : 'batas minimum '.$product->min_stock.' '.$product->unit }}
                     </span>
                 </div>
@@ -151,12 +151,16 @@
                                     <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-ink-500">Barang</th>
                                     <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Per paket</th>
                                     <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Stok</th>
+                                    <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Dijanjikan</th>
                                     <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Cukup untuk</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-ink-50">
                                 @foreach ($product->bundleComponents as $item)
-                                    @php $sets = $item->availableSets(); @endphp
+                                    @php
+                                        $reserved = (int) ($committed[$item->component_id] ?? 0);
+                                        $sets = $item->availableSets($reserved);
+                                    @endphp
                                     <tr class="transition hover:bg-ink-50/50">
                                         <td class="px-6 py-3.5">
                                             <a href="{{ route('admin.products.show', $item->component) }}"
@@ -176,6 +180,9 @@
                                         </td>
                                         <td class="px-6 py-3.5 text-right text-sm text-ink-600">
                                             {{ number_format($item->component->stock, 0, ',', '.') }}
+                                        </td>
+                                        <td class="px-6 py-3.5 text-right text-sm {{ $reserved > 0 ? 'text-amber-700' : 'text-ink-300' }}">
+                                            {{ $reserved > 0 ? '−'.number_format($reserved, 0, ',', '.') : '—' }}
                                         </td>
                                         <td class="px-6 py-3.5 text-right">
                                             {{-- Yang paling sedikit menyediakan paket adalah yang membatasi. --}}
@@ -199,6 +206,9 @@
                             Paket tidak punya saldo sendiri dan tidak pernah muncul di kartu stok — yang tercatat bergerak
                             adalah barang di atas. Angka <span class="font-semibold text-ink-950">{{ $availability }}</span>
                             dibatasi oleh baris bertanda kuning; menambah stok barang lain tidak menaikkannya.
+                            Kolom <span class="font-medium text-ink-950">Dijanjikan</span> adalah unit yang sudah tercantum
+                            di dokumen barang keluar yang belum diproses — barangnya masih di rak, tetapi tidak bisa
+                            dijanjikan dua kali.
                         </span>
                     </div>
                 @endif

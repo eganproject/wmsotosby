@@ -68,19 +68,31 @@ class Product extends Model
     }
 
     /**
-     * Berapa paket yang bisa dibentuk dari saldo komponennya saat ini.
+     * Berapa paket yang masih bisa dijanjikan ke pembeli.
      *
      * Selalu dihitung, tidak pernah disimpan. Menyimpannya berarti ada dua
      * sumber kebenaran atas satu barang yang sama — dan yang satu pasti
      * ketinggalan begitu komponennya bergerak lewat dokumen lain.
      *
+     * Unit yang sudah tercantum di dokumen barang keluar yang belum diproses
+     * ikut dipotong. Saldo di rak saja bukan jawaban atas pertanyaan yang
+     * sebenarnya diajukan orang yang membaca angka ini: paket ini masih bisa
+     * dijual berapa lagi? Barang yang sudah dijanjikan ke pembeli lain secara
+     * fisik memang masih ada, tetapi tidak lagi tersedia untuk dijanjikan
+     * kedua kalinya.
+     *
      * Paket tanpa isi bernilai nol: ia belum bisa dijual, bukan bisa dijual
-     * tanpa batas.
+     * tanpa batas. Paket yang dinonaktifkan juga nol — sama seperti perlakuan
+     * atas komponen yang dinonaktifkan, supaya keduanya tidak berbeda aturan.
      */
     public function bundleAvailability(): int
     {
         if (! $this->isBundle()) {
             return (int) $this->stock;
+        }
+
+        if (! $this->is_active) {
+            return 0;
         }
 
         /*
@@ -104,7 +116,34 @@ class Product extends Model
             return 0;
         }
 
-        return (int) $components->min(fn (ProductBundleItem $item) => $item->availableSets());
+        $committed = static::committedUnits($components->pluck('component_id'));
+
+        return (int) $components->min(
+            fn (ProductBundleItem $item) => $item->availableSets($committed[$item->component_id] ?? 0),
+        );
+    }
+
+    /**
+     * Unit yang sudah tercantum pada dokumen barang keluar yang belum diproses.
+     *
+     * Barangnya masih di rak, tetapi sudah dijanjikan ke pembeli lain — jadi
+     * tidak lagi tersedia untuk dijanjikan kedua kalinya. Angka yang sama
+     * dipakai laporan restock untuk menentukan apa yang perlu dipesan.
+     *
+     * @param  \Illuminate\Support\Collection<int, int>|array<int, int>  $productIds
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    public static function committedUnits($productIds): \Illuminate\Support\Collection
+    {
+        return DB::table('outbound_items as oi')
+            ->join('outbounds as o', 'o.id', '=', 'oi.outbound_id')
+            ->whereIn('oi.product_id', collect($productIds)->all())
+            ->whereIn('o.status', [Outbound::STATUS_DRAFT, Outbound::STATUS_PENDING])
+            ->groupBy('oi.product_id')
+            ->select('oi.product_id')
+            ->selectRaw('SUM(oi.quantity) as committed')
+            ->get()
+            ->mapWithKeys(fn (object $row) => [(int) $row->product_id => (int) $row->committed]);
     }
 
     /**
@@ -120,10 +159,22 @@ class Product extends Model
      */
     public function scopeWithBundleAvailability(Builder $query): Builder
     {
-        $sets = '(c.stock - (c.stock % pbi.quantity)) / pbi.quantity';
+        // Unit yang sudah dijanjikan ke pembeli lain, dipotong lebih dulu.
+        $committed = DB::table('outbound_items as oi')
+            ->join('outbounds as o', 'o.id', '=', 'oi.outbound_id')
+            ->whereIn('o.status', [Outbound::STATUS_DRAFT, Outbound::STATUS_PENDING])
+            ->groupBy('oi.product_id')
+            ->select('oi.product_id')
+            ->selectRaw('SUM(oi.quantity) as committed');
+
+        // Tidak pernah negatif: dokumen yang jumlahnya melebihi saldo memang
+        // bisa disusun sebagai draft, dan sisanya bukan berarti utang.
+        $free = '(CASE WHEN c.stock - COALESCE(cm.committed, 0) > 0 THEN c.stock - COALESCE(cm.committed, 0) ELSE 0 END)';
+        $sets = "({$free} - ({$free} % pbi.quantity)) / pbi.quantity";
 
         $availability = DB::table('product_bundle_items as pbi')
             ->join('products as c', 'c.id', '=', 'pbi.component_id')
+            ->leftJoinSub($committed, 'cm', 'cm.product_id', '=', 'c.id')
             ->whereColumn('pbi.bundle_id', 'products.id')
             ->selectRaw("MIN(CASE WHEN c.is_active = 0 OR pbi.quantity < 1 THEN 0 ELSE {$sets} END)");
 

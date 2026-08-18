@@ -2,11 +2,18 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Rules\NotABundle;
+use App\Http\Requests\Admin\Concerns\RejectsBundleLines;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreInboundRequest extends FormRequest
 {
+    use RejectsBundleLines;
+
+    protected function bundleLineAction(): string
+    {
+        return 'barang masuk';
+    }
+
     public function authorize(): bool
     {
         return $this->user()->can('inbounds.create');
@@ -23,7 +30,7 @@ class StoreInboundRequest extends FormRequest
             'reference' => ['nullable', 'string', 'max:100'],
             'note' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id', new NotABundle('barang masuk')],
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'items.*.damaged_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'items.*.note' => ['nullable', 'string', 'max:255'],
@@ -40,6 +47,8 @@ class StoreInboundRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            $this->rejectBundleLines($validator);
+
             foreach ($this->input('items', []) as $index => $item) {
                 $damaged = (int) ($item['damaged_quantity'] ?? 0);
 

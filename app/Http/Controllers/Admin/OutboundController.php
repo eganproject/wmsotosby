@@ -95,7 +95,7 @@ class OutboundController extends Controller implements HasMiddleware
                 'user_id' => auth()->id(),
             ]);
 
-            $lines = $this->buildLines($data['items'] ?? []);
+            $lines = $this->buildLines($data['items'] ?? [], null, $data['bundles'] ?? []);
 
             $outbound->items()->createMany($lines->items);
             $outbound->bundles()->createMany($lines->bundles);
@@ -179,7 +179,7 @@ class OutboundController extends Controller implements HasMiddleware
             // hilang dari antrean Siap Dikirim.
             $scanned = $outbound->items()->pluck('scanned_quantity', 'product_id');
 
-            $lines = $this->buildLines($data['items'] ?? [], $scanned);
+            $lines = $this->buildLines($data['items'] ?? [], $scanned, $data['bundles'] ?? []);
 
             $outbound->items()->delete();
             $outbound->bundles()->delete();
@@ -285,9 +285,23 @@ class OutboundController extends Controller implements HasMiddleware
      * @param  array<int, array<string, mixed>>  $lines
      * @param  Collection<int, int>|null  $scanned  hasil scan per barang yang masih boleh dipertahankan
      */
-    protected function buildLines(array $lines, ?Collection $scanned = null): BundledLines
+    protected function buildLines(array $lines, ?Collection $scanned = null, array $bundles = []): BundledLines
     {
-        $exploded = $this->exploder->explode($lines);
+        /*
+            Baris paket dan baris barang masuk ke pemecah sebagai satu daftar.
+
+            Dengan begitu barang yang dipesan lepas dan barang yang sama yang
+            datang dari paket digabung oleh aturan yang sama — bukan oleh
+            penggabungan kedua yang ditulis khusus di sini dan bisa berbeda
+            pendapat dengan yang pertama.
+        */
+        $exploded = $this->exploder->explode(array_merge(
+            collect($bundles)->map(fn (array $row) => [
+                'product_id' => (int) $row['bundle_id'],
+                'quantity' => (int) $row['quantity'],
+            ])->all(),
+            $lines,
+        ));
 
         return new BundledLines(
             array_map(fn (array $line) => $line + [
@@ -313,6 +327,10 @@ class OutboundController extends Controller implements HasMiddleware
         // dihitung sekali di basis data — memanggilnya per baris akan
         // membuat satu katalog berisi puluhan paket menjadi puluhan kueri.
         return Product::withBundleAvailability()
+            // Isi tiap paket dimuat sekaligus: editor menyebut berapa unit
+            // barang yang dihasilkan satu paket, dan menghitungnya per baris
+            // membuat satu katalog berisi puluhan paket menjadi puluhan kueri.
+            ->with('bundleComponents')
             ->where('is_active', true)
             ->when($outbound, fn ($query) => $query->orWhereIn('id', $outbound->items->pluck('product_id')))
             ->orderBy('name')

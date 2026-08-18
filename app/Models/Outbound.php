@@ -95,6 +95,49 @@ class Outbound extends Model
         return $this->belongsTo(ShipmentOrder::class);
     }
 
+    /**
+     * Baris barang yang bukan berasal dari paket.
+     *
+     * Baris dokumen tidak menyimpan asal-usulnya — satu barang bisa datang
+     * dari paket sekaligus dipesan satuan, dan memisahkannya menjadi dua baris
+     * akan merusak stasiun scan. Sisanya karena itu dihitung: unit yang
+     * dijanjikan paket dikurangkan dari tiap baris, dan yang tersisa memang
+     * yang dipesan lepas.
+     *
+     * Dipakai editor dokumen, supaya menyunting paket tidak berubah menjadi
+     * menyunting isinya satu per satu.
+     *
+     * Dikembalikan sebagai baris yang belum tersimpan, bukan larik, supaya
+     * editor baris dokumen menerimanya persis seperti baris biasa.
+     *
+     * @return \Illuminate\Support\Collection<int, OutboundItem>
+     */
+    public function looseItems(): \Illuminate\Support\Collection
+    {
+        $this->loadMissing('items', 'bundles');
+
+        $fromBundles = [];
+
+        foreach ($this->bundles as $bundle) {
+            foreach ($bundle->composition as $line) {
+                $id = (int) $line['product_id'];
+                $fromBundles[$id] = ($fromBundles[$id] ?? 0) + ((int) $line['quantity'] * $bundle->quantity);
+            }
+        }
+
+        return $this->items
+            ->map(fn (OutboundItem $item) => new OutboundItem([
+                'product_id' => $item->product_id,
+                // Tidak pernah negatif: bila resepnya berubah setelah dokumen
+                // dibentuk, sisanya bisa terhitung minus — dan yang benar saat
+                // itu adalah "tidak ada yang lepas", bukan utang.
+                'quantity' => max(0, $item->quantity - ($fromBundles[$item->product_id] ?? 0)),
+                'note' => $item->note,
+            ]))
+            ->filter(fn (OutboundItem $item) => $item->quantity > 0)
+            ->values();
+    }
+
     public function isDraft(): bool
     {
         return $this->status === self::STATUS_DRAFT;

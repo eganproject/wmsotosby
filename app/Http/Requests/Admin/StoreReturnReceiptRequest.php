@@ -5,13 +5,25 @@ namespace App\Http\Requests\Admin;
 use App\Models\Outbound;
 use App\Models\ReturnReceipt;
 use App\Models\ReturnReceiptItem;
+use App\Http\Requests\Admin\Concerns\RejectsBundleLines;
 use App\Models\ShipmentOrder;
-use App\Rules\NotABundle;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreReturnReceiptRequest extends FormRequest
 {
+    use RejectsBundleLines;
+
+    protected function bundleLineAction(): string
+    {
+        return 'penerimaan retur';
+    }
+
+    public function withValidator(\Illuminate\Contracts\Validation\Validator $validator): void
+    {
+        $validator->after(fn ($validator) => $this->rejectBundleLines($validator));
+    }
+
     public function authorize(): bool
     {
         return $this->user()->can('returns.create');
@@ -53,7 +65,7 @@ class StoreReturnReceiptRequest extends FormRequest
             'items' => [$this->resiExistsInImport() ? 'nullable' : 'required', 'array'],
             // Retur marketplace lewat scan resi memecah paketnya sendiri; yang
             // dijaga di sini adalah isian manual, yang barangnya dipilih orang.
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id', new NotABundle('penerimaan retur')],
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'items.*.good_quantity' => ['required', 'integer', 'min:0'],
             'items.*.damaged_quantity' => ['required', 'integer', 'min:0'],

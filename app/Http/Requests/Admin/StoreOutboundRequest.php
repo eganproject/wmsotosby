@@ -44,12 +44,55 @@ class StoreOutboundRequest extends FormRequest
             'note' => ['nullable', 'string', 'max:1000'],
 
             // Baris barang boleh dikosongkan bila resinya sudah ada di data
-            // import — isinya diambil otomatis saat scan resi.
-            'items' => [$this->resiExistsInImport() ? 'nullable' : 'required', 'array'],
+            // import — isinya diambil otomatis saat scan resi — atau bila
+            // dokumennya memang hanya berisi paket.
+            'items' => [
+                $this->resiExistsInImport() || filled($this->input('bundles')) ? 'nullable' : 'required',
+                'array',
+            ],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'items.*.note' => ['nullable', 'string', 'max:255'],
+
+            // Paket bundling dipesan sebagai barisnya sendiri, lalu dipecah
+            // menjadi barang saat disimpan. Barang keluar adalah satu-satunya
+            // dokumen tempat paket boleh muncul.
+            'bundles' => ['nullable', 'array'],
+            'bundles.*.bundle_id' => ['required', 'integer', 'distinct', 'exists:products,id'],
+            'bundles.*.quantity' => ['required', 'integer', 'min:1', 'max:100000'],
         ];
+    }
+
+    /**
+     * Baris yang dipesan sebagai paket harus benar-benar paket.
+     *
+     * Diperiksa dengan satu kueri untuk seluruh baris. Kesalahannya
+     * ditempelkan pada barisnya masing-masing supaya editor menyorot baris
+     * yang salah, bukan menampilkan satu pesan di kepala formulir.
+     */
+    public function withValidator(\Illuminate\Contracts\Validation\Validator $validator): void
+    {
+        $validator->after(function (\Illuminate\Contracts\Validation\Validator $validator) {
+            $ids = collect($this->input('bundles', []))
+                ->pluck('bundle_id')
+                ->filter()
+                ->map(fn ($id) => (int) $id);
+
+            if ($ids->isEmpty()) {
+                return;
+            }
+
+            $bundles = \App\Models\Product::bundles()->whereIn('id', $ids->unique())->pluck('id');
+
+            foreach ($ids as $index => $id) {
+                if (! $bundles->contains($id)) {
+                    $validator->errors()->add(
+                        "bundles.{$index}.bundle_id",
+                        'Baris ini bukan paket bundling. Pilih barangnya lewat baris barang biasa.',
+                    );
+                }
+            }
+        });
     }
 
     /**
@@ -68,7 +111,12 @@ class StoreOutboundRequest extends FormRequest
             ->values()
             ->all();
 
-        $payload = ['items' => $items];
+        $bundles = collect($this->input('bundles', []))
+            ->filter(fn ($row) => filled($row['bundle_id'] ?? null))
+            ->values()
+            ->all();
+
+        $payload = ['items' => $items, 'bundles' => $bundles];
 
         // Data marketplace tidak relevan untuk pengiriman reguler.
         if ($this->input('type') !== Outbound::TYPE_MARKETPLACE) {

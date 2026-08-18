@@ -38,13 +38,19 @@ class ProductBundleItem extends Model
      *
      * Komponen nonaktif dianggap tidak tersedia: ia memang tidak dipesan lagi,
      * jadi paket yang memuatnya tidak boleh terlihat masih bisa dijual.
+     *
+     * @param  int  $committed  unit yang sudah dijanjikan lewat dokumen yang belum diproses
      */
-    public function availableSets(): int
+    public function availableSets(int $committed = 0): int
     {
         if ($this->quantity < 1 || ! $this->component || ! $this->component->is_active) {
             return 0;
         }
 
-        return intdiv((int) $this->component->stock, $this->quantity);
+        // Tidak pernah negatif: dokumen yang jumlahnya melebihi saldo memang
+        // bisa disusun sebagai draft, dan sisanya bukan berarti utang.
+        $free = max(0, (int) $this->component->stock - $committed);
+
+        return intdiv($free, $this->quantity);
     }
 }

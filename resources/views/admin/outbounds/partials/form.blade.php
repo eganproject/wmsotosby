@@ -2,6 +2,23 @@
     $outbound = $outbound ?? null;
     $isEdit = (bool) $outbound;
     $type = old('type', $defaultType);
+
+    /*
+        Paket punya barisnya sendiri, terpisah dari baris barang.
+
+        Baris barang yang ditampilkan karenanya hanya yang dipesan lepas —
+        sisanya setelah dikurangi apa yang dijanjikan paket. Tanpa pemisahan
+        ini, menyunting dokumen berisi paket berarti menyunting isinya satu
+        per satu, dan menyimpan akan menghitung barangnya dua kali.
+    */
+    $bundleCatalog = $products->filter(fn ($product) => $product->isBundle())->values();
+    $itemCatalog = $products->reject(fn ($product) => $product->isBundle())->values();
+
+    $bundleRows = collect(old('bundles', $outbound?->bundles
+        ->map(fn ($bundle) => ['bundle_id' => $bundle->bundle_id, 'quantity' => $bundle->quantity])
+        ->all() ?? []))->values();
+
+    $lineItems = $outbound?->looseItems();
 @endphp
 
 <form method="POST" action="{{ $isEdit ? route('admin.outbounds.update', $outbound) : route('admin.outbounds.store') }}"
@@ -130,9 +147,16 @@
         </x-ui.card>
     </div>
 
-    @include('admin.partials.line-items', [
-        'products' => $products,
-        'items' => $outbound?->items,
-        'mode' => 'outbound',
-    ])
+    <div class="space-y-6">
+        @include('admin.outbounds.partials.bundles', [
+            'bundles' => $bundleCatalog,
+            'rows' => $bundleRows,
+        ])
+
+        @include('admin.partials.line-items', [
+            'products' => $itemCatalog,
+            'items' => $lineItems,
+            'mode' => 'outbound',
+        ])
+    </div>
 </form>

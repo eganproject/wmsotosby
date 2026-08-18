@@ -22,12 +22,28 @@
 
     <x-ui.tabs group="stock" />
 
-    <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <x-ui.stat-card label="Jenis Barang" :value="$summary['total']" icon="box" accent
-                        :hint="$summary['bundles'] > 0 ? 'SKU barang · '.$summary['bundles'].' paket bundling' : 'SKU terdaftar'" />
+    {{--
+        Paket mendapat kartunya sendiri, bukan menumpang sebagai catatan kaki
+        di kartu pertama.
+
+        Empat kartu di sebelahnya semuanya berbicara tentang saldo di rak, dan
+        paket tidak punya saldo — ikut menghitungnya membuat "Jenis Barang"
+        tidak lagi cocok dengan "Total Unit". Tetapi tabel di bawah memang
+        menampilkan paket, jadi tanpa kartu kelima ini jumlah kartu dan jumlah
+        baris bercerita beda tanpa ada yang menjelaskan selisihnya.
+
+        Kartunya hanya muncul bila memang ada paket, supaya gudang yang tidak
+        memakainya tidak diberi kolom kosong untuk selamanya.
+    --}}
+    <div class="grid grid-cols-2 gap-4 {{ $summary['bundles'] > 0 ? 'xl:grid-cols-5' : 'xl:grid-cols-4' }}">
+        <x-ui.stat-card label="Jenis Barang" :value="$summary['total']" icon="box" accent hint="SKU barang di rak" />
         <x-ui.stat-card label="Total Unit" :value="number_format($summary['units'], 0, ',', '.')" icon="chart" hint="Seluruh stok tersedia" />
         <x-ui.stat-card label="Stok Menipis" :value="$summary['low']" icon="warning" hint="Di bawah batas minimum" />
         <x-ui.stat-card label="Stok Habis" :value="$summary['out']" icon="x-circle" hint="Perlu segera diisi" />
+        @if ($summary['bundles'] > 0)
+            <x-ui.stat-card label="Paket Bundling" :value="$summary['bundles']" icon="sparkles"
+                            hint="Tanpa stok sendiri, dirakit dari isinya" />
+        @endif
     </div>
 
     <form method="GET" action="{{ route('admin.products.index') }}" data-auto-submit
@@ -259,7 +275,7 @@
                                     <span class="text-sm font-semibold text-ink-950">{{ number_format($product->availableStock(), 0, ',', '.') }}</span>
                                     <span class="text-xs text-ink-400">{{ $product->unit }}</span>
                                     <p class="text-[11px] text-ink-400">
-                                        {{ $product->isBundle() ? 'dari komponen' : 'min. '.$product->min_stock }}
+                                        {{ $product->isBundle() ? 'bisa dijanjikan' : 'min. '.$product->min_stock }}
                                     </p>
                                 </td>
                                 <td class="px-6 py-4">
@@ -325,7 +341,7 @@
                                         </p>
                                         <p class="text-[11px] text-ink-400">
                                             @if ($product->isBundle())
-                                                bisa dirakit dari komponen
+                                                masih bisa dijanjikan
                                             @else
                                                 min. {{ $product->min_stock }} &middot; {{ $product->location ?: 'tanpa lokasi' }}
                                             @endif

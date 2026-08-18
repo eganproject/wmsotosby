@@ -269,6 +269,38 @@ class ProductImportService
         return blank($value) ? null : trim((string) $value);
     }
 
+    /**
+     * Tanda yang dipakai berkas kita sendiri untuk menyatakan "kosong".
+     *
+     * @var array<int, string>
+     */
+    public const PLACEHOLDERS = ['-', '–', '—', 'n/a', 'na', '(kosong)'];
+
+    /**
+     * Sama seperti value(), tetapi tanda hubung tunggal dibaca sebagai kosong.
+     *
+     * Berkas hasil export kita menulis "-" pada kolom yang memang tidak
+     * berisi apa-apa, supaya laporannya enak dibaca. Tanpa pemahaman ini,
+     * mengimport balik berkas itu — alur paling lazim: unduh, sunting
+     * beberapa baris, unggah lagi — menuliskan tanda hubung itu sebagai
+     * nilai sungguhan. Setiap barang yang kategorinya kosong berubah menjadi
+     * berkategori "-", dan barang tanpa barcode mendapat barcode "-" yang
+     * lalu bentrok dengan barang berikutnya yang juga tanpa barcode.
+     *
+     * Hanya berlaku untuk kolom yang boleh kosong di basis data. SKU, nama,
+     * dan satuan tidak pernah melewati sini, jadi barang yang memang bernama
+     * "-" tetap terbaca apa adanya.
+     *
+     * @param  array<int, string>  $row
+     * @param  array<string, int>  $header
+     */
+    protected function optional(array $row, array $header, string $field): ?string
+    {
+        $value = $this->value($row, $header, $field);
+
+        return in_array(mb_strtolower((string) $value), self::PLACEHOLDERS, true) ? null : $value;
+    }
+
     /* --------------------------------------------------- pengumpulan ----- */
 
     /**
@@ -293,10 +325,10 @@ class ProductImportService
             $entries->put(Str::upper(trim($sku)), [
                 'sku' => Str::upper(trim($sku)),
                 'name' => $name,
-                'barcode' => $this->value($row, $header, 'barcode'),
-                'category' => $this->value($row, $header, 'category'),
+                'barcode' => $this->optional($row, $header, 'barcode'),
+                'category' => $this->optional($row, $header, 'category'),
                 'unit' => $this->value($row, $header, 'unit') ?: 'pcs',
-                'location' => $this->value($row, $header, 'location'),
+                'location' => $this->optional($row, $header, 'location'),
                 // Kolom ini tidak boleh null di database, jadi kosong berarti 0.
                 'min_stock' => $this->number($this->value($row, $header, 'min_stock')) ?? 0,
                 'stock' => isset($header['stock'])
