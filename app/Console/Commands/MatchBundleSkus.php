@@ -3,22 +3,17 @@
 namespace App\Console\Commands;
 
 use App\Models\Product;
-use App\Models\ShipmentOrderItem;
+use App\Services\ShipmentSkuMatcher;
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
  * Cocokkan baris pesanan lama ke barang yang baru didaftarkan.
  *
- * Pencocokan SKU hanya terjadi sekali, saat berkasnya diimport. Resi yang
- * masuk sebelum paket bundlingnya didaftarkan karena itu tetap menggantung
- * dengan product_id kosong, dan di halaman Status Resi terbaca "SKU belum
- * lengkap di master barang" — padahal barangnya sekarang sudah ada.
- *
- * Mengimport ulang berkas Ginee-nya menyelesaikan hal yang sama. Perintah ini
- * untuk saat berkasnya sudah tidak ada, atau saat yang perlu diperbaiki hanya
- * beberapa resi lama.
+ * Hal yang sama bisa dikerjakan dari halaman Import Resi lewat tombol
+ * "Cocokkan Ulang", dan itulah jalan yang lebih lazim. Perintah ini untuk
+ * pengerjaan borongan setelah banyak barang didaftarkan sekaligus, dan
+ * keduanya memakai service yang sama supaya tidak bisa berbeda hasil.
  *
  * Tanpa --apply perintah ini tidak menulis apa pun. Ini menyangkut data
  * produksi, dan mencocokkan baris pesanan berarti paketnya menjadi bisa
@@ -32,9 +27,11 @@ class MatchBundleSkus extends Command
 
     protected $description = 'Cocokkan SKU pada resi lama ke master barang yang baru didaftarkan';
 
-    public function handle(): int
+    public function handle(ShipmentSkuMatcher $matcher): int
     {
-        $unmatched = $this->unmatchedSkus();
+        $bundlesOnly = ! $this->option('all');
+
+        $unmatched = $matcher->unmatchedSkus();
 
         if ($unmatched->isEmpty()) {
             $this->components->info('Tidak ada baris pesanan yang SKU-nya belum tercocokkan. Data Anda sudah sesuai.');
@@ -42,9 +39,10 @@ class MatchBundleSkus extends Command
             return self::SUCCESS;
         }
 
-        $resolvable = $this->resolvable($unmatched);
+        $resolvable = $matcher->resolvable($unmatched, $bundlesOnly);
+        $ambiguous = $matcher->ambiguous($unmatched);
 
-        $this->showFindings($unmatched, $resolvable);
+        $this->showFindings($unmatched, $resolvable, $ambiguous, $bundlesOnly);
 
         if ($resolvable->isEmpty()) {
             $this->newLine();
@@ -63,64 +61,34 @@ class MatchBundleSkus extends Command
             return self::SUCCESS;
         }
 
-        $rows = 0;
-
-        foreach ($resolvable as $sku => $product) {
-            $rows += ShipmentOrderItem::query()
-                ->whereNull('product_id')
-                ->whereRaw('UPPER(TRIM(sku)) = ?', [$sku])
-                ->update(['product_id' => $product->id]);
-        }
+        $result = $matcher->match(bundlesOnly: $bundlesOnly);
 
         $this->components->info(
-            "{$rows} baris pesanan dicocokkan ke ".$resolvable->count().' barang. '
+            "{$result['rows']} baris pesanan dicocokkan ke {$result['skus']} barang. "
             .'Resinya kini bisa dibuka di stasiun packing.',
         );
+
+        if ($result['remaining']->isNotEmpty()) {
+            $this->components->warn(
+                'Masih tersisa '.$result['remaining']->count().' SKU yang belum terdaftar: '
+                .$result['remaining']->keys()->take(10)->implode(', ').'.',
+            );
+        }
 
         return self::SUCCESS;
     }
 
     /**
-     * SKU yang muncul pada baris pesanan tetapi belum menunjuk barang mana pun,
-     * beserta berapa baris yang memakainya.
-     *
-     * @return Collection<string, int>
-     */
-    protected function unmatchedSkus(): Collection
-    {
-        return ShipmentOrderItem::query()
-            ->whereNull('product_id')
-            ->get(['sku'])
-            ->groupBy(fn (ShipmentOrderItem $item) => strtoupper(trim($item->sku)))
-            ->map(fn (Collection $group) => $group->count())
-            ->sortDesc();
-    }
-
-    /**
-     * Di antara SKU itu, mana yang kini sudah ada di master barang.
-     *
-     * Bawaannya hanya paket bundling — itulah yang fitur ini perkenalkan, dan
-     * mempersempitnya membuat perintah ini tidak diam-diam ikut memperbaiki
-     * hal lain yang mungkin sengaja dibiarkan. --all melonggarkannya.
-     *
-     * @param  Collection<string, int>  $unmatched
-     * @return Collection<string, Product>
-     */
-    protected function resolvable(Collection $unmatched): Collection
-    {
-        return Product::query()
-            ->when(! $this->option('all'), fn (Builder $query) => $query->bundles())
-            ->get(['id', 'sku', 'name', 'type'])
-            ->keyBy(fn (Product $product) => strtoupper(trim($product->sku)))
-            ->intersectByKeys($unmatched);
-    }
-
-    /**
      * @param  Collection<string, int>  $unmatched
      * @param  Collection<string, Product>  $resolvable
+     * @param  Collection<string, Collection<int, Product>>  $ambiguous
      */
-    protected function showFindings(Collection $unmatched, Collection $resolvable): void
-    {
+    protected function showFindings(
+        Collection $unmatched,
+        Collection $resolvable,
+        Collection $ambiguous,
+        bool $bundlesOnly,
+    ): void {
         $this->newLine();
         $this->line('SKU pada resi yang belum tercocokkan ke master barang:');
 
@@ -131,6 +99,7 @@ class MatchBundleSkus extends Command
                 $count,
                 match (true) {
                     $resolvable->has($sku) => $resolvable[$sku]->name.' ('.($resolvable[$sku]->isBundle() ? 'paket' : 'barang').')',
+                    $ambiguous->has($sku) => 'RANCU — ada '.$ambiguous[$sku]->count().' barang dengan SKU yang sama',
                     default => '—  belum ada di master barang',
                 },
             ])->values(),
@@ -141,8 +110,13 @@ class MatchBundleSkus extends Command
         $this->newLine();
         $this->line("Akan dicocokkan: <fg=yellow>{$rows}</> baris pesanan pada <fg=yellow>{$resolvable->count()}</> SKU.");
 
-        if (! $this->option('all')) {
+        if ($bundlesOnly) {
             $this->line('  Hanya SKU yang terdaftar sebagai paket bundling. Pakai --all untuk ikut mencocokkan barang biasa.');
+        }
+
+        if ($ambiguous->isNotEmpty()) {
+            $this->line('  <fg=red>'.$ambiguous->count().' SKU dilewati karena rancu</> — ada lebih dari satu barang');
+            $this->line('  dengan SKU yang sama bila huruf besar dan spasi diabaikan. Samakan salah satunya dulu.');
         }
     }
 }

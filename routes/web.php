@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\ReturnScanController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\ShipmentImportController;
 use App\Http\Controllers\Admin\ShipmentOrderCancellationController;
+use App\Http\Controllers\Admin\ShipmentSkuMatchController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockApiAllowedIpController;
 use App\Http\Controllers\Admin\StockMovementController;
@@ -114,6 +115,8 @@ Route::middleware('auth')
         // Import resi dari Ginee
         Route::get('imports/status', WaybillStatusController::class)->name('imports.status');
         Route::get('imports/couriers', CourierReportController::class)->name('imports.couriers');
+        Route::post('imports/rematch', [ShipmentSkuMatchController::class, 'all'])->name('imports.rematch');
+        Route::post('imports/orders/{order}/rematch', [ShipmentSkuMatchController::class, 'order'])->name('imports.orders.rematch');
         Route::post('imports/orders/{order}/cancel', [ShipmentOrderCancellationController::class, 'store'])->name('imports.orders.cancel');
         Route::delete('imports/orders/{order}/cancel', [ShipmentOrderCancellationController::class, 'destroy'])->name('imports.orders.restore');
         Route::get('imports/lookup', [ShipmentImportController::class, 'lookup'])->name('imports.lookup');

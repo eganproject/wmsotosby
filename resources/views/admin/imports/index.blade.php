@@ -29,12 +29,32 @@
             <div class="min-w-0 flex-1">
                 <p class="text-sm font-semibold text-amber-900">{{ $summary['unmatched'] }} baris memiliki SKU yang belum terdaftar</p>
                 <p class="mt-0.5 text-xs text-amber-800">
-                    Pesanan dengan SKU tak dikenal tidak bisa menarik barang otomatis saat scan. Daftarkan SKU-nya di menu Barang &amp; Stok.
+                    Pesanan dengan SKU tak dikenal tidak bisa menarik barang otomatis saat scan. Daftarkan SKU-nya di
+                    menu Barang &amp; Stok, lalu cocokkan ulang — pencocokan hanya terjadi saat berkas diunggah, jadi
+                    barang yang baru didaftarkan tidak terbaca dengan sendirinya.
                 </p>
             </div>
-            <x-ui.button :href="route('admin.imports.index', ['match' => 'unmatched'])" variant="secondary" size="sm">
-                Lihat
-            </x-ui.button>
+            <div class="flex shrink-0 flex-wrap items-center gap-2">
+                <x-ui.button :href="route('admin.imports.index', ['match' => 'unmatched'])" variant="secondary" size="sm">
+                    Lihat
+                </x-ui.button>
+                @can('imports.create')
+                    {{--
+                        Saringan yang sedang aktif ikut terkirim supaya daftar
+                        kembali ke tampilan yang sama setelah dicocokkan —
+                        di situlah hasilnya paling terlihat.
+                    --}}
+                    <form method="POST" action="{{ route('admin.imports.rematch') }}">
+                        @csrf
+                        @foreach (['search', 'marketplace', 'courier', 'match', 'from', 'to'] as $filter)
+                            @if (request()->filled($filter))
+                                <input type="hidden" name="{{ $filter }}" value="{{ request($filter) }}">
+                            @endif
+                        @endforeach
+                        <x-ui.button type="submit" size="sm" icon="refresh">Cocokkan Ulang Semua</x-ui.button>
+                    </form>
+                @endcan
+            </div>
         </div>
     @endif
 
@@ -161,6 +181,35 @@
                                 </div>
                             @endforeach
                         </div>
+
+                        {{--
+                            Untuk kasus yang paling sering: barangnya baru saja
+                            didaftarkan, dan yang perlu diperbaiki hanya resi
+                            ini. Tombolnya hanya muncul saat memang ada yang
+                            menggantung, dan aman ditekan berulang — ia hanya
+                            mengisi baris yang kosong, tidak pernah mengubah
+                            yang sudah cocok.
+                        --}}
+                        @if (! $order->isFullyMatched())
+                            @can('imports.create')
+                                <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-ink-50/70 px-3 py-2">
+                                    <p class="min-w-0 flex-1 text-[11px] text-ink-500">
+                                        Sudah mendaftarkan barangnya? Cocokkan ulang untuk memeriksa master barang terbaru.
+                                    </p>
+                                    <form method="POST" action="{{ route('admin.imports.orders.rematch', $order) }}">
+                                        @csrf
+                                        @foreach (['search', 'marketplace', 'courier', 'match', 'from', 'to'] as $filter)
+                                            @if (request()->filled($filter))
+                                                <input type="hidden" name="{{ $filter }}" value="{{ request($filter) }}">
+                                            @endif
+                                        @endforeach
+                                        <x-ui.button type="submit" variant="secondary" size="sm" icon="refresh">
+                                            Cocokkan Ulang
+                                        </x-ui.button>
+                                    </form>
+                                </div>
+                            @endcan
+                        @endif
                     </div>
                 @endforeach
             </div>
