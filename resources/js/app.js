@@ -3,6 +3,7 @@ import './navigation';
 import './enhance';
 
 import Alpine from 'alpinejs';
+import bundleRecipe from './bundle-recipe';
 import cameraScanner from './camera-scanner';
 import dispatchStation from './dispatch-station';
 import lineItems from './line-items';
@@ -17,6 +18,7 @@ import stockPicker from './stock-picker';
 window.Alpine = Alpine;
 
 // Didaftarkan sebelum start() agar komponen hasil swap AJAX ikut dikenali.
+Alpine.data('bundleRecipe', bundleRecipe);
 Alpine.data('cameraScanner', cameraScanner);
 Alpine.data('dispatchStation', dispatchStation);
 Alpine.data('lineItems', lineItems);

@@ -276,8 +276,15 @@ class ReturnReceiptController extends Controller implements HasMiddleware
             ->all();
     }
 
+    /**
+     * Katalog barang untuk editor baris.
+     *
+     * Paket bundling tidak ikut: yang datang di kardus retur selalu barang
+     * satuan, dan kondisinya dinilai satu per satu. Retur yang masuk lewat
+     * scan resi sudah dipecah sendiri oleh resolver.
+     */
     protected function products()
     {
-        return Product::where('is_active', true)->orderBy('name')->get();
+        return Product::singles()->where('is_active', true)->orderBy('name')->get();
     }
 }

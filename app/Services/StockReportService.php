@@ -153,6 +153,13 @@ class StockReportService
     {
         return DB::table('products as p')
             ->leftJoinSub($this->movements($filters), 'm', 'm.product_id', '=', 'p.id')
+            /*
+                Paket bundling tidak punya saldo dan tidak pernah menghasilkan
+                mutasi, jadi barisnya akan berisi nol di setiap kolom sepanjang
+                periode apa pun. Yang ikut hanyalah barang yang benar-benar
+                bergerak — mencampurnya hanya mengencerkan angka perputaran.
+            */
+            ->where('p.type', Product::TYPE_SINGLE)
             ->when($filters->search, fn (Builder $query, string $term) => $query->where(
                 fn (Builder $query) => $query
                     ->where('p.sku', 'like', "%{$term}%")

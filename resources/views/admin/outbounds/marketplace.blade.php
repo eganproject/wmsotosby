@@ -203,6 +203,36 @@
                     </div>
 
                     {{--
+                        Paket yang sedang dirakit.
+
+                        Daftar di bawah berisi barang lepas hasil pemecahan,
+                        dan tanpa baris ini jumlahnya tidak cocok dengan apa
+                        pun yang tertulis di label: operator memegang satu
+                        label bertulis "Paket Servis 10K ×2" sementara layar
+                        meminta tujuh barang yang seolah tak berhubungan.
+                    --}}
+                    <template x-if="bundles.length">
+                        <div class="shrink-0 border-b border-ink-100 bg-ink-950 px-5 py-2.5 text-white">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-white/50">Isi paket yang dirakit</p>
+                            <ul class="mt-1.5 space-y-1">
+                                <template x-for="bundle in bundles" :key="bundle.sku">
+                                    <li class="flex items-center justify-between gap-3 text-xs">
+                                        <span class="min-w-0 truncate">
+                                            <span class="font-mono text-white/60" x-text="bundle.sku"></span>
+                                            <span class="text-white/40">·</span>
+                                            <span x-text="bundle.name"></span>
+                                        </span>
+                                        <span class="shrink-0 font-semibold" x-text="`×${bundle.quantity}`"></span>
+                                    </li>
+                                </template>
+                            </ul>
+                            <p class="mt-1.5 text-[11px] leading-relaxed text-white/50">
+                                Yang discan tetap barangnya satu per satu — paketnya sendiri tidak punya barcode.
+                            </p>
+                        </div>
+                    </template>
+
+                    {{--
                         Stok kurang diberitahukan begitu resi discan, bukan saat
                         paket hendak diproses. Scan tetap boleh jalan; yang
                         dihindari adalah operator baru tahu setelah selesai.

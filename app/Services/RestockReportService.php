@@ -125,6 +125,16 @@ class RestockReportService
             ->leftJoinSub($this->movements($filters), 'm', 'm.product_id', '=', 'p.id')
             ->leftJoinSub($this->committed(), 'c', 'c.product_id', '=', 'p.id')
             ->where('p.is_active', true)
+            /*
+                Paket bundling tidak pernah dipesan ke pemasok — yang dipesan
+                adalah barang isinya, dan barang itu sudah punya barisnya
+                sendiri di sini.
+
+                Tanpa saringan ini paket ikut terhitung dengan saldo nol abadi,
+                jadi selalu muncul sebagai "perlu dipesan" dan menaikkan angka
+                pada kartu ringkasan tanpa ada yang benar-benar perlu dibeli.
+            */
+            ->where('p.type', Product::TYPE_SINGLE)
             ->when($filters->search, fn (Builder $query, string $term) => $query->where(
                 fn (Builder $query) => $query
                     ->where('p.sku', 'like', "%{$term}%")

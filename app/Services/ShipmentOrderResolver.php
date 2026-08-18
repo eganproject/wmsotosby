@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ShipmentOrder;
 use App\Models\ShipmentOrderItem;
+use App\Support\BundledLines;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -11,34 +12,45 @@ use Illuminate\Validation\ValidationException;
  *
  * Pencocokan barang sepenuhnya bertumpu pada SKU: SKU pada baris pesanan
  * harus ada di master barang sebelum dokumen bisa dibentuk otomatis.
+ *
+ * Marketplace menjual sebagian barang sebagai paket, dan berkas Ginee
+ * menuliskannya sebagai satu SKU utuh. Di sinilah SKU itu diterjemahkan
+ * menjadi barang yang benar-benar ada di rak — sebelum satu baris dokumen
+ * pun ditulis, sehingga seluruh hilir hanya pernah melihat barang nyata.
  */
 class ShipmentOrderResolver
 {
+    public function __construct(protected BundleExploder $exploder)
+    {
+    }
+
     public function resolve(?string $trackingNumber): ?ShipmentOrder
     {
         return ShipmentOrder::findByTrackingNumber($trackingNumber);
     }
 
     /**
-     * Baris barang untuk dokumen barang keluar.
-     *
-     * @return array<int, array<string, mixed>>
+     * Baris barang untuk dokumen barang keluar, berikut paket asalnya.
      */
-    public function toOutboundLines(ShipmentOrder $order): array
+    public function toOutboundLines(ShipmentOrder $order): BundledLines
     {
         $this->guardAllSkusMatched($order);
 
-        return $order->items->map(fn (ShipmentOrderItem $item) => [
-            'product_id' => $item->product_id,
-            'quantity' => $item->quantity,
-            'scanned_quantity' => 0,
-            'note' => $item->sku,
-        ])->all();
+        $lines = $this->exploder->explode($this->rawLines($order));
+
+        return new BundledLines(
+            array_map(fn (array $line) => $line + ['scanned_quantity' => 0], $lines->items),
+            $lines->bundles,
+        );
     }
 
     /**
      * Baris barang untuk dokumen penerimaan retur. Kondisi awal dianggap
      * layak jual dan bisa diubah operator sebelum retur diterima.
+     *
+     * Paket dipecah di sini juga: yang kembali ke rak adalah barang isinya,
+     * dan kondisinya dinilai satu per satu — paket yang isinya sebagian utuh
+     * dan sebagian penyok memang tidak bisa digambarkan sebagai satu baris.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -46,12 +58,26 @@ class ShipmentOrderResolver
     {
         $this->guardAllSkusMatched($order);
 
+        return array_map(fn (array $line) => [
+            'product_id' => $line['product_id'],
+            'quantity' => $line['quantity'],
+            // Hasil pemeriksaan diisi operator; awalnya dianggap utuh.
+            'good_quantity' => $line['quantity'],
+            'damaged_quantity' => 0,
+            'note' => $line['note'],
+        ], $this->exploder->explode($this->rawLines($order))->items);
+    }
+
+    /**
+     * Isi pesanan apa adanya, sebelum paket dipecah.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function rawLines(ShipmentOrder $order): array
+    {
         return $order->items->map(fn (ShipmentOrderItem $item) => [
             'product_id' => $item->product_id,
             'quantity' => $item->quantity,
-            // Hasil pemeriksaan diisi operator; awalnya dianggap utuh.
-            'good_quantity' => $item->quantity,
-            'damaged_quantity' => 0,
             'note' => $item->sku,
         ])->all();
     }
@@ -77,6 +103,10 @@ class ShipmentOrderResolver
                 'product_name' => $item->product?->name ?? $item->product_name,
                 'quantity' => $item->quantity,
                 'matched' => $item->isMatched(),
+                // Paket akan dipecah menjadi barang isinya saat dokumennya
+                // dibentuk, jadi apa yang tampil di sini belum tentu sama
+                // dengan apa yang nanti discan.
+                'is_bundle' => (bool) $item->product?->isBundle(),
             ])->values()->all(),
         ];
     }

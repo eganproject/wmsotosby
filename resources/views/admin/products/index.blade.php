@@ -23,7 +23,8 @@
     <x-ui.tabs group="stock" />
 
     <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <x-ui.stat-card label="Jenis Barang" :value="$summary['total']" icon="box" accent hint="SKU terdaftar" />
+        <x-ui.stat-card label="Jenis Barang" :value="$summary['total']" icon="box" accent
+                        :hint="$summary['bundles'] > 0 ? 'SKU barang · '.$summary['bundles'].' paket bundling' : 'SKU terdaftar'" />
         <x-ui.stat-card label="Total Unit" :value="number_format($summary['units'], 0, ',', '.')" icon="chart" hint="Seluruh stok tersedia" />
         <x-ui.stat-card label="Stok Menipis" :value="$summary['low']" icon="warning" hint="Di bawah batas minimum" />
         <x-ui.stat-card label="Stok Habis" :value="$summary['out']" icon="x-circle" hint="Perlu segera diisi" />
@@ -53,11 +54,17 @@
                 <option value="low" @selected(request('stock') === 'low')>Menipis</option>
                 <option value="out" @selected(request('stock') === 'out')>Habis</option>
             </x-ui.select>
+
+            <x-ui.select name="type" class="sm:w-36">
+                <option value="">Semua jenis</option>
+                <option value="single" @selected(request('type') === 'single')>Barang</option>
+                <option value="bundle" @selected(request('type') === 'bundle')>Paket</option>
+            </x-ui.select>
         </div>
 
         <div class="flex items-center gap-2">
             <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
-            @if (request()->hasAny(['search', 'category', 'stock', 'status']))
+            @if (request()->hasAny(['search', 'category', 'stock', 'status', 'type']))
                 <x-ui.button :href="route('admin.products.index')" variant="ghost" size="icon" title="Reset filter">
                     <x-icon name="refresh" class="h-4 w-4" />
                 </x-ui.button>
@@ -120,7 +127,7 @@
                 saringan, dan sekaligus membawa daftar kembali ke tampilan yang
                 sama setelah selesai.
             --}}
-            @foreach (['search', 'category', 'stock', 'status'] as $filter)
+            @foreach (['search', 'category', 'stock', 'status', 'type'] as $filter)
                 @if (request()->filled($filter))
                     <input type="hidden" name="{{ $filter }}" value="{{ request($filter) }}">
                 @endif
@@ -236,6 +243,9 @@
                                     <div class="flex items-center gap-2">
                                         <x-ui.sku :value="$product->sku" />
                                         <p class="truncate text-sm font-medium text-ink-950">{{ $product->name }}</p>
+                                        @if ($product->isBundle())
+                                            <x-ui.badge variant="dark" icon="sparkles">Paket</x-ui.badge>
+                                        @endif
                                     </div>
                                     @if ($product->barcode)
                                         <p class="mt-1 font-mono text-[11px] text-ink-400">Barcode {{ $product->barcode }}</p>
@@ -244,9 +254,13 @@
                                 <td class="px-6 py-4 text-sm text-ink-600">{{ $product->category ?: '—' }}</td>
                                 <td class="px-6 py-4 font-mono text-xs text-ink-500">{{ $product->location ?: '—' }}</td>
                                 <td class="px-6 py-4 text-right">
-                                    <span class="text-sm font-semibold text-ink-950">{{ number_format($product->stock, 0, ',', '.') }}</span>
+                                    {{-- Paket tidak punya saldo; yang berarti baginya adalah berapa
+                                         yang masih bisa dirakit dari komponen yang tersedia. --}}
+                                    <span class="text-sm font-semibold text-ink-950">{{ number_format($product->availableStock(), 0, ',', '.') }}</span>
                                     <span class="text-xs text-ink-400">{{ $product->unit }}</span>
-                                    <p class="text-[11px] text-ink-400">min. {{ $product->min_stock }}</p>
+                                    <p class="text-[11px] text-ink-400">
+                                        {{ $product->isBundle() ? 'dari komponen' : 'min. '.$product->min_stock }}
+                                    </p>
                                 </td>
                                 <td class="px-6 py-4">
                                     <x-ui.stock-badge :product="$product" />
@@ -292,7 +306,12 @@
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-start justify-between gap-3">
                                     <div class="min-w-0">
-                                        <x-ui.sku :value="$product->sku" />
+                                        <div class="flex items-center gap-2">
+                                            <x-ui.sku :value="$product->sku" />
+                                            @if ($product->isBundle())
+                                                <x-ui.badge variant="dark" icon="sparkles">Paket</x-ui.badge>
+                                            @endif
+                                        </div>
                                         <p class="mt-1 truncate text-sm font-semibold text-ink-950">{{ $product->name }}</p>
                                     </div>
                                     <x-ui.stock-badge :product="$product" />
@@ -301,11 +320,15 @@
                                 <div class="mt-3 flex items-end justify-between gap-3">
                                     <div>
                                         <p class="text-2xl font-semibold tracking-tight text-ink-950">
-                                            {{ number_format($product->stock, 0, ',', '.') }}
+                                            {{ number_format($product->availableStock(), 0, ',', '.') }}
                                             <span class="text-xs font-normal text-ink-400">{{ $product->unit }}</span>
                                         </p>
                                         <p class="text-[11px] text-ink-400">
-                                            min. {{ $product->min_stock }} &middot; {{ $product->location ?: 'tanpa lokasi' }}
+                                            @if ($product->isBundle())
+                                                bisa dirakit dari komponen
+                                            @else
+                                                min. {{ $product->min_stock }} &middot; {{ $product->location ?: 'tanpa lokasi' }}
+                                            @endif
                                         </p>
                                     </div>
 

@@ -74,6 +74,17 @@ class Outbound extends Model
         return $this->hasMany(OutboundItem::class);
     }
 
+    /**
+     * Paket bundling yang dipesan pada dokumen ini.
+     *
+     * Sekadar penjelasan asal-usul baris barang — stoknya tetap bergerak
+     * lewat items, yang isinya barang nyata.
+     */
+    public function bundles(): HasMany
+    {
+        return $this->hasMany(OutboundBundle::class);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

@@ -233,8 +233,14 @@ class StockAdjustmentController extends Controller implements HasMiddleware
             ->all();
     }
 
+    /**
+     * Katalog barang untuk editor baris.
+     *
+     * Paket bundling tidak ikut: ia tidak punya saldo yang bisa disesuaikan.
+     * Yang berselisih dengan kenyataan selalu barang yang ada di rak.
+     */
     protected function products()
     {
-        return Product::where('is_active', true)->orderBy('name')->get();
+        return Product::singles()->where('is_active', true)->orderBy('name')->get();
     }
 }

@@ -13,6 +13,7 @@ class ProductImport extends Model
         'created_count',
         'updated_count',
         'stock_adjusted_count',
+        'bundle_skipped_count',
         'detected_columns',
         'user_id',
     ];

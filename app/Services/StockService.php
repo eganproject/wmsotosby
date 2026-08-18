@@ -367,6 +367,25 @@ class StockService
         // Kunci baris agar dua dokumen tidak menghitung saldo dari angka yang sama.
         $product = Product::lockForUpdate()->findOrFail($productId);
 
+        /*
+            Paket bundling tidak punya saldo, jadi tidak ada yang bisa
+            digerakkan atas namanya.
+
+            Penjagaannya ditaruh di sini, bukan di tiap pemanggil, karena
+            inilah satu-satunya pintu menuju perubahan stok. Selama ia
+            tertutup, tidak ada dokumen jenis apa pun — sekarang maupun yang
+            ditambahkan nanti — yang bisa menghitung satu barang dua kali:
+            sekali sebagai paket, sekali sebagai isinya.
+
+            Pemeriksaannya membaca kolom pada model yang sudah dimuat baris di
+            atas, jadi tidak ada kueri tambahan pada tiap pergerakan stok.
+        */
+        if ($product->isBundle()) {
+            throw ValidationException::withMessages([
+                'items' => "{$product->sku} adalah paket bundling dan tidak punya stok sendiri. Yang bergerak adalah barang isinya.",
+            ]);
+        }
+
         $column = $bucket === StockMovement::BUCKET_DAMAGED ? 'damaged_stock' : 'stock';
         $current = (int) $product->{$column};
 

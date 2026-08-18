@@ -8,12 +8,19 @@
     // diterima supaya tautan ke surat jalannya terjaga untuk klaim.
     $withDamaged = $mode === 'inbound';
 
+    /*
+        Untuk paket bundling, "stok" berisi berapa paket yang masih bisa
+        dirakit dari komponennya. Angka itulah yang membatasi berapa banyak
+        yang boleh dipesan — kolom stok paket sendiri selamanya nol, dan
+        memakainya akan membuat setiap paket tampak melebihi stok.
+    */
     $catalog = $products->map(fn ($product) => [
         'id' => $product->id,
         'name' => $product->name,
         'sku' => $product->sku,
         'unit' => $product->unit,
-        'stock' => $product->stock,
+        'stock' => $product->availableStock(),
+        'is_bundle' => $product->isBundle(),
     ])->values();
 
     // Rincian rusak/hilang hanya ada pada baris retur.
@@ -97,8 +104,13 @@
                                         <span class="opacity-50">SKU</span>
                                         <span x-text="product(row).sku"></span>
                                     </span>
+                                    <template x-if="product(row).is_bundle">
+                                        <span class="inline-flex items-center rounded-full bg-ink-950 px-2 py-0.5 text-[11px] font-medium text-white">Paket</span>
+                                    </template>
                                     <span class="text-[11px] text-ink-400"
-                                          x-text="`Stok tersedia: ${product(row).stock} ${product(row).unit}`"></span>
+                                          x-text="product(row).is_bundle
+                                              ? `Bisa dirakit: ${product(row).stock} ${product(row).unit} — isinya dipecah saat disimpan`
+                                              : `Stok tersedia: ${product(row).stock} ${product(row).unit}`"></span>
                                 </p>
                             </template>
                         </div>

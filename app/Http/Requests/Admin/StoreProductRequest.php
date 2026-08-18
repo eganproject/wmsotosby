@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Admin\Concerns\ValidatesBundleRecipe;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 
 class StoreProductRequest extends FormRequest
 {
+    use ValidatesBundleRecipe;
+
     public function authorize(): bool
     {
         return $this->user()->can('products.create');
@@ -26,7 +29,7 @@ class StoreProductRequest extends FormRequest
             'location' => ['nullable', 'string', 'max:100'],
             'min_stock' => ['required', 'integer', 'min:0', 'max:1000000'],
             'is_active' => ['boolean'],
-        ];
+        ] + $this->recipeRules();
     }
 
     protected function prepareForValidation(): void
@@ -37,6 +40,16 @@ class StoreProductRequest extends FormRequest
             'min_stock' => $this->input('min_stock', 0),
             'is_active' => $this->boolean('is_active'),
         ]);
+
+        $this->prepareRecipe();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return $this->recipeMessages();
     }
 
     /**

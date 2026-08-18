@@ -93,13 +93,7 @@ class ReturnMarketplaceController extends Controller implements HasMiddleware
             'code' => ['required', 'string', 'max:191'],
         ])['code'];
 
-        $product = Product::findByCode($code);
-
-        if (! $product) {
-            throw ValidationException::withMessages([
-                'code' => "Kode {$code} tidak dikenali sebagai barcode maupun SKU barang mana pun.",
-            ]);
-        }
+        $product = $this->productFor($code);
 
         return response()->json([
             'product' => [
@@ -246,6 +240,21 @@ class ReturnMarketplaceController extends Controller implements HasMiddleware
         if (! $product) {
             throw ValidationException::withMessages([
                 'code' => "Kode {$code} tidak dikenali sebagai barcode maupun SKU barang mana pun.",
+            ]);
+        }
+
+        /*
+            Paket bundling tidak bisa diterima kembali sebagai satu baris.
+
+            Yang datang di kardus retur selalu barang satuan, dan kondisinya
+            dinilai satu per satu — satu botol bisa utuh sementara filternya
+            penyok. Retur yang datang lewat scan resi sudah dipecah sendiri
+            oleh resolver; yang lewat sini adalah isian manual, dan di situ
+            barangnya dipilih orang.
+        */
+        if ($product->isBundle()) {
+            throw ValidationException::withMessages([
+                'code' => "{$product->sku} adalah paket · scan barang isinya satu per satu",
             ]);
         }
 

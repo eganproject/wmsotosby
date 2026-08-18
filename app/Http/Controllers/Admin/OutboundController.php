@@ -9,6 +9,8 @@ use App\Http\Requests\Admin\UpdateOutboundRequest;
 use App\Models\Outbound;
 use App\Models\Product;
 use App\Services\ApprovalService;
+use App\Services\BundleExploder;
+use App\Support\BundledLines;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -20,8 +22,10 @@ use Illuminate\View\View;
 
 class OutboundController extends Controller implements HasMiddleware
 {
-    public function __construct(protected ApprovalService $approvals)
-    {
+    public function __construct(
+        protected ApprovalService $approvals,
+        protected BundleExploder $exploder,
+    ) {
     }
 
     public static function middleware(): array
@@ -91,7 +95,10 @@ class OutboundController extends Controller implements HasMiddleware
                 'user_id' => auth()->id(),
             ]);
 
-            $outbound->items()->createMany($this->mergeLines($data['items'] ?? []));
+            $lines = $this->buildLines($data['items'] ?? []);
+
+            $outbound->items()->createMany($lines->items);
+            $outbound->bundles()->createMany($lines->bundles);
 
             return $outbound;
         });
@@ -115,7 +122,7 @@ class OutboundController extends Controller implements HasMiddleware
 
     public function show(Outbound $outbound): View
     {
-        $outbound->load(['items.product', 'user']);
+        $outbound->load(['items.product', 'bundles.bundle', 'user']);
 
         return view('admin.outbounds.show', compact('outbound'));
     }
@@ -130,7 +137,7 @@ class OutboundController extends Controller implements HasMiddleware
                     : 'Dokumen yang sudah disetujui bersifat final dan tidak dapat diubah.');
         }
 
-        $outbound->load('items.product');
+        $outbound->load('items.product', 'bundles.bundle');
 
         return view('admin.outbounds.edit', [
             'outbound' => $outbound,
@@ -172,8 +179,12 @@ class OutboundController extends Controller implements HasMiddleware
             // hilang dari antrean Siap Dikirim.
             $scanned = $outbound->items()->pluck('scanned_quantity', 'product_id');
 
+            $lines = $this->buildLines($data['items'] ?? [], $scanned);
+
             $outbound->items()->delete();
-            $outbound->items()->createMany($this->mergeLines($data['items'] ?? [], $scanned));
+            $outbound->bundles()->delete();
+            $outbound->items()->createMany($lines->items);
+            $outbound->bundles()->createMany($lines->bundles);
 
             // Verifikasi resi berlaku atas satu nomor tertentu, jadi hanya nomor
             // yang berganti — atau dokumen yang berpindah jenis — yang
@@ -265,28 +276,27 @@ class OutboundController extends Controller implements HasMiddleware
     }
 
     /**
+     * Baris dokumen dari isian form.
+     *
+     * Paket bundling dipecah menjadi barang isinya lebih dulu, lalu barang
+     * yang sama digabung menjadi satu baris — termasuk bila ia datang dari
+     * paket sekaligus dipesan satuan pada dokumen yang sama.
+     *
      * @param  array<int, array<string, mixed>>  $lines
-     * @param  \Illuminate\Support\Collection<int, int>|null  $scanned  hasil scan per barang yang masih boleh dipertahankan
-     * @return array<int, array<string, mixed>>
+     * @param  Collection<int, int>|null  $scanned  hasil scan per barang yang masih boleh dipertahankan
      */
-    protected function mergeLines(array $lines, ?Collection $scanned = null): array
+    protected function buildLines(array $lines, ?Collection $scanned = null): BundledLines
     {
-        return collect($lines)
-            ->groupBy('product_id')
-            ->map(function ($group, $productId) use ($scanned) {
-                $quantity = (int) $group->sum('quantity');
+        $exploded = $this->exploder->explode($lines);
 
-                return [
-                    'product_id' => (int) $productId,
-                    'quantity' => $quantity,
-                    // Tidak pernah melebihi jumlah yang diminta: baris yang
-                    // jumlahnya dikurangi tidak boleh tampak lebih dari selesai.
-                    'scanned_quantity' => min((int) ($scanned[$productId] ?? 0), $quantity),
-                    'note' => $group->pluck('note')->filter()->implode(', ') ?: null,
-                ];
-            })
-            ->values()
-            ->all();
+        return new BundledLines(
+            array_map(fn (array $line) => $line + [
+                // Tidak pernah melebihi jumlah yang diminta: baris yang
+                // jumlahnya dikurangi tidak boleh tampak lebih dari selesai.
+                'scanned_quantity' => min((int) ($scanned[$line['product_id']] ?? 0), $line['quantity']),
+            ], $exploded->items),
+            $exploded->bundles,
+        );
     }
 
     /**
@@ -298,7 +308,12 @@ class OutboundController extends Controller implements HasMiddleware
      */
     protected function products(?Outbound $outbound = null)
     {
-        return Product::where('is_active', true)
+        // Paket bundling ikut, tidak seperti dokumen lain: barang keluar
+        // justru satu-satunya tempat paket boleh dipesan. Ketersediaannya
+        // dihitung sekali di basis data — memanggilnya per baris akan
+        // membuat satu katalog berisi puluhan paket menjadi puluhan kueri.
+        return Product::withBundleAvailability()
+            ->where('is_active', true)
             ->when($outbound, fn ($query) => $query->orWhereIn('id', $outbound->items->pluck('product_id')))
             ->orderBy('name')
             ->get();

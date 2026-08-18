@@ -39,7 +39,7 @@ class OutboundScanController extends Controller implements HasMiddleware
                 ->with('error', 'Verifikasi scan hanya berlaku untuk pengiriman marketplace.');
         }
 
-        $outbound->load('items.product');
+        $outbound->load('items.product', 'bundles.bundle');
 
         return view('admin.outbounds.scan', [
             'outbound' => $outbound,

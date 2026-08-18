@@ -12,6 +12,12 @@ class Product extends Model
 {
     use HasFactory;
 
+    /** Barang biasa: punya wujud di rak dan punya saldo sendiri. */
+    public const TYPE_SINGLE = 'single';
+
+    /** Paket bundling: dijual sebagai satu SKU, tetapi tidak pernah ada di rak. */
+    public const TYPE_BUNDLE = 'bundle';
+
     protected $fillable = [
         'sku',
         'barcode',
@@ -21,6 +27,7 @@ class Product extends Model
         'location',
         'min_stock',
         'is_active',
+        'type',
     ];
 
     protected function casts(): array
@@ -35,6 +42,116 @@ class Product extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(StockMovement::class)->latest('id');
+    }
+
+    /* ------------------------------------------------------------ paket -- */
+
+    /**
+     * Isi paket ini. Kosong untuk barang biasa.
+     */
+    public function bundleComponents(): HasMany
+    {
+        return $this->hasMany(ProductBundleItem::class, 'bundle_id');
+    }
+
+    /**
+     * Paket-paket yang memuat barang ini sebagai isinya.
+     */
+    public function partOfBundles(): HasMany
+    {
+        return $this->hasMany(ProductBundleItem::class, 'component_id');
+    }
+
+    public function isBundle(): bool
+    {
+        return $this->type === self::TYPE_BUNDLE;
+    }
+
+    /**
+     * Berapa paket yang bisa dibentuk dari saldo komponennya saat ini.
+     *
+     * Selalu dihitung, tidak pernah disimpan. Menyimpannya berarti ada dua
+     * sumber kebenaran atas satu barang yang sama — dan yang satu pasti
+     * ketinggalan begitu komponennya bergerak lewat dokumen lain.
+     *
+     * Paket tanpa isi bernilai nol: ia belum bisa dijual, bukan bisa dijual
+     * tanpa batas.
+     */
+    public function bundleAvailability(): int
+    {
+        if (! $this->isBundle()) {
+            return (int) $this->stock;
+        }
+
+        /*
+            Hasil withBundleAvailability() dipakai bila kuerinya memang
+            memintanya, supaya daftar berisi puluhan paket tidak berubah
+            menjadi puluhan kueri komponen.
+
+            Keberadaan kuncinya yang diperiksa, bukan nilainya: paket tanpa isi
+            menghasilkan null, dan `??` akan menganggapnya belum dihitung lalu
+            memuat komponennya — persis N+1 yang scope itu hindari.
+        */
+        if (array_key_exists('bundle_availability', $this->attributes)) {
+            return (int) $this->attributes['bundle_availability'];
+        }
+
+        $components = $this->relationLoaded('bundleComponents')
+            ? $this->bundleComponents
+            : $this->bundleComponents()->with('component')->get();
+
+        if ($components->isEmpty()) {
+            return 0;
+        }
+
+        return (int) $components->min(fn (ProductBundleItem $item) => $item->availableSets());
+    }
+
+    /**
+     * Ketersediaan paket sebagai kolom hasil kueri, untuk daftar dan laporan.
+     *
+     * Dihitung di basis data supaya satu halaman berisi puluhan paket tidak
+     * berubah menjadi puluhan kueri komponen.
+     *
+     * Pembagiannya ditulis dengan sisa bagi, bukan FLOOR: SQLite bawaan PHP
+     * dikompilasi tanpa fungsi matematika sama sekali, sedangkan MySQL
+     * punya. Bentuk (a - a % b) / b selalu habis dibagi, jadi hasilnya tepat
+     * di kedua basis data — sama seperti yang dipakai laporan restock.
+     */
+    public function scopeWithBundleAvailability(Builder $query): Builder
+    {
+        $sets = '(c.stock - (c.stock % pbi.quantity)) / pbi.quantity';
+
+        $availability = DB::table('product_bundle_items as pbi')
+            ->join('products as c', 'c.id', '=', 'pbi.component_id')
+            ->whereColumn('pbi.bundle_id', 'products.id')
+            ->selectRaw("MIN(CASE WHEN c.is_active = 0 OR pbi.quantity < 1 THEN 0 ELSE {$sets} END)");
+
+        return $query
+            ->select('products.*')
+            ->selectSub($availability, 'bundle_availability');
+    }
+
+    public function scopeBundles(Builder $query): Builder
+    {
+        return $query->where('type', self::TYPE_BUNDLE);
+    }
+
+    public function scopeSingles(Builder $query): Builder
+    {
+        return $query->where('type', self::TYPE_SINGLE);
+    }
+
+    /**
+     * Angka yang layak ditampilkan sebagai "berapa yang bisa dikirim".
+     *
+     * Untuk barang biasa itu saldo di rak. Untuk paket itu hasil hitungan dari
+     * komponennya — satu-satunya angka yang punya arti, karena kolom stoknya
+     * memang selamanya nol.
+     */
+    public function availableStock(): int
+    {
+        return $this->isBundle() ? $this->bundleAvailability() : (int) $this->stock;
     }
 
     /**
@@ -52,9 +169,17 @@ class Product extends Model
 
     /**
      * Label status stok untuk badge di tabel.
+     *
+     * Paket hanya mengenal dua keadaan: masih bisa dirakit, atau tidak.
+     * "Menipis" tidak berlaku baginya — batas minimum adalah setelan atas
+     * saldo di rak, dan paket tidak punya rak.
      */
     public function stockStatus(): string
     {
+        if ($this->isBundle()) {
+            return $this->availableStock() > 0 ? 'aman' : 'habis';
+        }
+
         return match (true) {
             $this->isOutOfStock() => 'habis',
             $this->isLowStock() => 'menipis',
@@ -62,9 +187,17 @@ class Product extends Model
         };
     }
 
+    /**
+     * Barang yang stoknya menyentuh batas minimum.
+     *
+     * Paket tidak pernah ikut: kolom stoknya selamanya nol dan batas
+     * minimumnya nol pula, sehingga 0 <= 0 akan membuat setiap paket terbaca
+     * menipis selama-lamanya — menaikkan hitungan di dasbor dan mendesak
+     * pemesanan barang yang memang tidak pernah dipesan.
+     */
     public function scopeLowStock(Builder $query): Builder
     {
-        return $query->whereColumn('stock', '<=', 'min_stock');
+        return $query->singles()->whereColumn('stock', '<=', 'min_stock');
     }
 
     /**
@@ -89,10 +222,43 @@ class Product extends Model
             'damaged_disposal_items' => 'barang rusak',
         ];
 
-        return collect($tables)
+        $blocking = collect($tables)
             ->filter(fn (string $label, string $table) => DB::table($table)->where('product_id', $this->id)->exists())
             ->values()
             ->all();
+
+        /*
+            Resep paket diperiksa terpisah karena kolomnya bukan product_id.
+
+            Kedua arah dihitung: barang yang menjadi isi paket lain, dan paket
+            yang isinya sudah tersusun. Keduanya memakai kunci asing yang
+            berbeda perlakuannya — isi bersifat RESTRICT, resep bersifat
+            CASCADE — tetapi bagi yang menghapus, keduanya sama-sama alasan
+            untuk berhenti dan melihat dulu.
+        */
+        if ($this->partOfBundles()->exists()) {
+            $blocking[] = 'isi paket bundling';
+        }
+
+        if ($this->isBundle() && $this->bundleComponents()->exists()) {
+            $blocking[] = 'resep paket bundling';
+        }
+
+        /*
+            Paket yang tercantum pada dokumen barang keluar.
+
+            Kolomnya bundle_id, bukan product_id, sehingga pemeriksaan di atas
+            melewatinya — sementara kunci asingnya RESTRICT dan akan menolak
+            penghapusannya. Tanpa baris ini, menghapus paket yang masih ada di
+            satu draft berakhir sebagai galat basis data, bukan sebagai kalimat
+            yang bisa ditindaklanjuti. Persis kekeliruan yang sudah dijelaskan
+            di atas, hanya untuk tabel yang lebih baru.
+        */
+        if ($this->isBundle() && DB::table('outbound_bundles')->where('bundle_id', $this->id)->exists()) {
+            $blocking[] = 'barang keluar (sebagai paket)';
+        }
+
+        return $blocking;
     }
 
     /**

@@ -240,9 +240,16 @@ class InboundController extends Controller implements HasMiddleware
             ->all();
     }
 
+    /**
+     * Katalog barang untuk editor baris.
+     *
+     * Paket bundling tidak ikut: tidak ada wujudnya yang bisa diterima dari
+     * pemasok. Disaring di sini, bukan hanya ditolak validasi, supaya pilihan
+     * yang mustahil tidak pernah muncul di layar.
+     */
     protected function products()
     {
-        return Product::where('is_active', true)->orderBy('name')->get();
+        return Product::singles()->where('is_active', true)->orderBy('name')->get();
     }
 
     protected function suppliers()

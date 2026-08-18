@@ -14,6 +14,25 @@ class StockApiSyncService
         if (! Schema::hasTable('stock_api_sync_records')) {
             return;
         }
+
+        /*
+            Paket bundling tidak dilaporkan ke pusat.
+
+            Ia tidak punya saldo sendiri, jadi angka yang bisa dikirim hanyalah
+            turunan dari komponennya — dan turunan itu punya sifat yang berbeda
+            dari SKU biasa: dua paket yang berbagi komponen sama-sama melaporkan
+            ketersediaan penuh, sehingga penjumlahannya melebih-lebihkan.
+
+            Sistem di seberang tidak tahu perbedaan itu dan tidak ada di bawah
+            kendali kita. Mengirimkannya berarti mengubah arti data yang sudah
+            dibaca orang lain tanpa bisa mengujinya lebih dulu — jadi untuk
+            sekarang pusat melihat kumpulan SKU yang persis sama seperti
+            sebelum paket ada. Kalau kelak pusat memang membutuhkannya, itu
+            keputusan tersendiri, bukan efek samping fitur ini.
+        */
+        if ($product->isBundle()) {
+            return;
+        }
         $data = [
             'product_id' => $product->id,
             'sku' => $product->sku,

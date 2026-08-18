@@ -350,6 +350,7 @@ class ProductImportService
             $created = 0;
             $updated = 0;
             $adjusted = 0;
+            $bundlesSkipped = 0;
 
             foreach ($entries as $entry) {
                 $stock = $entry['stock'];
@@ -358,11 +359,49 @@ class ProductImportService
                 $product = Product::where('sku', $entry['sku'])->first();
 
                 if ($product) {
-                    $product->update($entry);
+                    /*
+                        Kolom yang hanya masuk akal bagi barang berwujud tidak
+                        pernah ditulis ke paket bundling.
+
+                        Barcode yang paling penting: paket tidak punya wujud
+                        yang bisa ditempeli label, dan satu kode yang menempel
+                        padanya membuat scan di stasiun packing menunjuk baris
+                        yang tidak pernah ada di dokumen. Lokasi rak dan batas
+                        menipis sama saja — keduanya setelan atas saldo, dan
+                        paket tidak punya saldo.
+
+                        Barang baru selalu lahir sebagai barang biasa, jadi
+                        pemeriksaannya cukup di jalur pembaruan.
+                    */
+                    $product->update($product->isBundle()
+                        ? collect($entry)->except(['barcode', 'location', 'min_stock'])->all()
+                        : $entry);
+
                     $updated++;
                 } else {
                     $product = Product::create($entry);
                     $created++;
+                }
+
+                /*
+                    Paket bundling tidak punya saldo yang bisa disetel.
+
+                    Tanpa penjagaan ini, satu angka stok pada baris paket akan
+                    tertahan di StockService dan — karena seluruh berkas
+                    diproses sebagai satu transaksi — menggagalkan import
+                    seluruhnya, termasuk ratusan baris lain yang tidak
+                    bermasalah. Barisnya tetap diperbarui seperti biasa; hanya
+                    kolom stoknya yang dilewati, dan itu dilaporkan.
+
+                    Ikut dilaporkan pula saat berkasnya berasal dari export
+                    kita sendiri: di sana kolom stok paket berisi ketersediaan
+                    turunannya — angka yang tampak seperti bisa disetel padahal
+                    tidak. Justru itu yang paling perlu disebut.
+                */
+                if ($stock !== null && $product->isBundle()) {
+                    $bundlesSkipped++;
+
+                    continue;
                 }
 
                 // Stok tidak pernah ditulis langsung; selisihnya jadi pergerakan stok.
@@ -375,6 +414,7 @@ class ProductImportService
                 'created_count' => $created,
                 'updated_count' => $updated,
                 'stock_adjusted_count' => $adjusted,
+                'bundle_skipped_count' => $bundlesSkipped,
             ]);
 
             return $import->refresh();

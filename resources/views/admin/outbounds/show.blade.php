@@ -89,6 +89,63 @@
                 </div>
             @endif
 
+            {{--
+                Paket yang dipesan.
+
+                Baris barang di bawah sudah berupa isinya, karena itulah yang
+                benar-benar turun dari rak. Tanpa kartu ini dokumennya hanya
+                berupa daftar barang lepas, dan tidak ada yang bisa menjawab
+                kenapa ada tiga botol oli di paket yang pembelinya memesan dua
+                paket servis.
+
+                Susunannya dibaca dari salinan yang disimpan saat dokumen
+                dibentuk, bukan dari resep yang berlaku sekarang — resep bisa
+                berubah, sedangkan yang sudah dikirim tidak.
+            --}}
+            @if ($outbound->bundles->isNotEmpty())
+                <x-ui.card title="Paket yang Dipesan"
+                           :subtitle="$outbound->bundles->count().' paket · sudah dipecah menjadi baris barang di bawah'"
+                           padding="p-0">
+                    <div class="divide-y divide-ink-50">
+                        @foreach ($outbound->bundles as $bundle)
+                            <div class="px-6 py-4">
+                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <x-ui.badge variant="dark" icon="sparkles">Paket</x-ui.badge>
+                                            <p class="truncate text-sm font-medium text-ink-950">
+                                                {{ $bundle->bundle?->name ?? 'Paket sudah dihapus' }}
+                                            </p>
+                                        </div>
+                                        @if ($bundle->bundle)
+                                            <div class="mt-1"><x-ui.sku :value="$bundle->bundle->sku" /></div>
+                                        @endif
+                                    </div>
+                                    <span class="shrink-0 text-sm font-semibold text-ink-950">
+                                        &times;{{ $bundle->quantity }}
+                                    </span>
+                                </div>
+
+                                <ul class="mt-3 space-y-1.5 border-l-2 border-ink-100 pl-4">
+                                    @foreach ($bundle->composition as $line)
+                                        <li class="flex items-center justify-between gap-3 text-xs">
+                                            <span class="min-w-0 truncate text-ink-600">
+                                                <span class="font-mono text-ink-400">{{ $line['sku'] }}</span>
+                                                &middot; {{ $line['name'] }}
+                                            </span>
+                                            <span class="shrink-0 text-ink-500">
+                                                {{ $line['quantity'] }} &times; {{ $bundle->quantity }} =
+                                                <span class="font-semibold text-ink-950">{{ $line['quantity'] * $bundle->quantity }}</span>
+                                            </span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endforeach
+                    </div>
+                </x-ui.card>
+            @endif
+
             {{-- Baris barang --}}
             <x-ui.card title="Baris Barang"
                        :subtitle="$outbound->items->count().' baris · total '.number_format($outbound->totalQuantity(), 0, ',', '.').' unit'"

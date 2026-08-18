@@ -56,6 +56,14 @@ class ProductImportController extends Controller implements HasMiddleware
             ? ", dan {$import->stock_adjusted_count} stok disesuaikan."
             : '.';
 
+        // Angka stok pada baris paket tidak bisa dikerjakan. Disebut terpisah
+        // supaya yang mengetiknya tahu angkanya tidak berlaku, alih-alih
+        // mengira stok paketnya sudah tersimpan.
+        if ($import->bundle_skipped_count > 0) {
+            $message .= " Stok pada {$import->bundle_skipped_count} baris paket bundling diabaikan —"
+                .' isi paket yang menentukan ketersediaannya.';
+        }
+
         return redirect()
             ->route('admin.products.index')
             ->with('success', $message);

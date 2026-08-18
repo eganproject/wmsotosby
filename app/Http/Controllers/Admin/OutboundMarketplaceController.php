@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Outbound;
+use App\Models\OutboundBundle;
 use App\Models\OutboundItem;
 use App\Models\ShipmentOrder;
 use App\Services\OutboundScanService;
@@ -99,6 +100,16 @@ class OutboundMarketplaceController extends Controller implements HasMiddleware
                 'stock' => $item->product->stock,
                 'quantity' => $item->quantity,
             ])->values(),
+            // Paket yang menghasilkan baris di atas. Yang discan tetap
+            // barangnya, tetapi operator perlu tahu ia sedang merakit paket —
+            // tanpa ini layar hanya menampilkan barang lepas yang jumlahnya
+            // tidak cocok dengan apa pun yang tertulis di label paket.
+            'bundles' => $outbound->bundles->map(fn (OutboundBundle $bundle) => [
+                'sku' => $bundle->bundle?->sku,
+                'name' => $bundle->bundle?->name,
+                'quantity' => $bundle->quantity,
+                'composition' => $bundle->composition,
+            ])->values(),
             'progress' => $this->scanner->progress($outbound),
             'urls' => [
                 'item' => route('admin.outbounds.scan.item', $outbound),
@@ -141,11 +152,16 @@ class OutboundMarketplaceController extends Controller implements HasMiddleware
         }
 
         // Baris barang selalu diambil ulang dari data import agar sesuai pesanan.
+        // Paket bundling sudah dipecah menjadi barang isinya oleh resolver.
         $lines = $this->resolver->toOutboundLines($order);
 
         // Paket yang stoknya tidak cukup tidak dibuka sama sekali: lebih baik
         // ditolak sebelum ada yang discan daripada tersangkut di tengah.
-        if ($shortages = $this->scanner->stockShortages($lines)) {
+        //
+        // Yang diperiksa adalah barang hasil pemecahan, bukan SKU paketnya —
+        // sehingga pesannya menyebut komponen mana yang kurang, yang memang
+        // satu-satunya hal yang bisa ditindaklanjuti operator.
+        if ($shortages = $this->scanner->stockShortages($lines->items)) {
             throw ValidationException::withMessages([
                 'code' => $shortages,
             ]);
@@ -169,9 +185,11 @@ class OutboundMarketplaceController extends Controller implements HasMiddleware
             ])->save();
 
             $outbound->items()->delete();
-            $outbound->items()->createMany($lines);
+            $outbound->bundles()->delete();
+            $outbound->items()->createMany($lines->items);
+            $outbound->bundles()->createMany($lines->bundles);
 
-            return $outbound->load('items.product');
+            return $outbound->load('items.product', 'bundles.bundle');
         });
     }
 }

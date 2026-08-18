@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Rules\NotABundle;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreInboundRequest extends FormRequest
@@ -22,7 +23,7 @@ class StoreInboundRequest extends FormRequest
             'reference' => ['nullable', 'string', 'max:100'],
             'note' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id', new NotABundle('barang masuk')],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'items.*.damaged_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'items.*.note' => ['nullable', 'string', 'max:255'],

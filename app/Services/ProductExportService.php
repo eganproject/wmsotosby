@@ -33,6 +33,11 @@ class ProductExportService
         ['Stok Minimum', 'min_stock', 'number'],
         ['Status Stok', 'stock_status', 'text'],
         ['Status Barang', 'active_status', 'text'],
+        // Ditambahkan di ujung, bukan disisipkan dekat nama barang: posisi
+        // kolom lama adalah hal yang dihafal orang yang membuka berkas ini
+        // tiap minggu, dan menggesernya membuat berkas yang sudah dikenal
+        // terasa asing tanpa alasan.
+        ['Jenis', 'type_label', 'text'],
     ];
 
     public function download(Builder $query, string $filename): StreamedResponse
@@ -86,7 +91,12 @@ class ProductExportService
         return match ($field) {
             'stock_status' => ucfirst($product->stockStatus()),
             'active_status' => $product->is_active ? 'Aktif' : 'Nonaktif',
-            'stock', 'min_stock' => (int) $product->{$field},
+            'type_label' => $product->isBundle() ? 'Paket' : 'Barang',
+            // Kolom stok pada paket berisi ketersediaan turunannya, bukan nol.
+            // Nol akan terbaca sebagai "habis" oleh siapa pun yang membuka
+            // berkasnya, padahal komponennya bisa saja menumpuk penuh di rak.
+            'stock' => $product->availableStock(),
+            'min_stock' => (int) $product->{$field},
             default => (string) ($product->{$field} ?? '-'),
         };
     }

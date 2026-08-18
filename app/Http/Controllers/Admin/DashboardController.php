@@ -29,10 +29,18 @@ class DashboardController extends Controller implements HasMiddleware
     public function __invoke(): View
     {
         $stats = [
-            'products' => Product::count(),
-            'stock_units' => (int) Product::sum('stock'),
+            /*
+                Angka gudang dihitung atas barang yang benar-benar ada di rak.
+
+                Paket bundling tidak punya saldo: menghitungnya sebagai jenis
+                barang membuat "Jenis Barang" tidak lagi cocok dengan "Total
+                Unit", dan memasukkannya ke stok menipis membuat tiap paket
+                mendesak pemesanan barang yang memang tidak pernah dipesan.
+            */
+            'products' => Product::singles()->count(),
+            'stock_units' => (int) Product::singles()->sum('stock'),
             'low_stock' => Product::lowStock()->count(),
-            'damaged_units' => (int) Product::sum('damaged_stock'),
+            'damaged_units' => (int) Product::singles()->sum('damaged_stock'),
             'inbound_month' => Inbound::where('status', Inbound::STATUS_POSTED)
                 ->whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()])
                 ->count(),

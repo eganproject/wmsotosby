@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\Outbound;
+use App\Models\OutboundBundle;
 use App\Models\OutboundItem;
 use App\Models\Product;
 use App\Models\ShipmentOrder;
+use App\Support\BundledLines;
 use App\Support\NormalizesScanCode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -76,37 +78,52 @@ class OutboundScanService
     /**
      * Ganti baris dokumen dengan isi pesanan hasil import.
      *
+     * Paket sudah dipecah oleh resolver, jadi yang ditulis ke baris dokumen
+     * selalu barang nyata. Paket asalnya ikut disimpan terpisah — keduanya
+     * ditulis dalam satu transaksi supaya dokumen tidak pernah berada dalam
+     * keadaan yang barangnya sudah berganti tetapi keterangannya belum.
+     *
      * @return int Jumlah baris yang diambil, 0 bila isinya sudah sama.
      */
     protected function syncItemsFromImport(Outbound $outbound, ShipmentOrder $order): int
     {
         $lines = $this->resolver->toOutboundLines($order);
 
-        $current = $outbound->items
-            ->map(fn (OutboundItem $item) => $item->product_id.'x'.$item->quantity)
-            ->sort()
-            ->values()
-            ->all();
-
-        $incoming = collect($lines)
-            ->map(fn (array $line) => $line['product_id'].'x'.$line['quantity'])
-            ->sort()
-            ->values()
-            ->all();
-
-        if ($current === $incoming) {
+        if ($this->signatureOf($outbound) === $lines->signature()) {
             return 0;
         }
 
         DB::transaction(function () use ($outbound, $order, $lines) {
             $outbound->items()->delete();
-            $outbound->items()->createMany($lines);
+            $outbound->bundles()->delete();
+            $outbound->items()->createMany($lines->items);
+            $outbound->bundles()->createMany($lines->bundles);
             $outbound->forceFill(['shipment_order_id' => $order->id])->save();
         });
 
-        $outbound->load('items.product');
+        $outbound->load('items.product', 'bundles.bundle');
 
-        return count($lines);
+        return count($lines->items);
+    }
+
+    /**
+     * Sidik jari isi dokumen yang tersimpan sekarang, dalam bentuk yang sama
+     * dengan hasil pemecahan paket — supaya keduanya bisa dibandingkan.
+     */
+    protected function signatureOf(Outbound $outbound): string
+    {
+        $outbound->loadMissing('items', 'bundles');
+
+        return (new BundledLines(
+            $outbound->items->map(fn (OutboundItem $item) => [
+                'product_id' => $item->product_id,
+                'quantity' => $item->quantity,
+            ])->all(),
+            $outbound->bundles->map(fn (OutboundBundle $bundle) => [
+                'bundle_id' => $bundle->bundle_id,
+                'quantity' => $bundle->quantity,
+            ])->all(),
+        ))->signature();
     }
 
     /**
@@ -270,6 +287,19 @@ class OutboundScanService
         // Dicari langsung di database agar tidak memuat seluruh master barang.
         $product = Product::findByCode($needle);
 
+        if ($product?->isBundle()) {
+            /*
+                Paket tidak punya wujud, jadi tidak ada yang bisa discan atas
+                namanya — yang dipegang operator selalu barang isinya.
+
+                Perlu jawaban sendiri karena kalimat baku di bawah ("tidak
+                termasuk dalam pesanan ini") justru salah di sini: paketnya
+                memang dipesan, hanya saja sudah dipecah sejak dokumen dibentuk.
+                Operator yang membacanya akan menyangka ia salah paket.
+            */
+            return "{$product->sku} adalah paket · scan barang isinya satu per satu";
+        }
+
         if ($product) {
             return "{$product->name} (SKU {$product->sku}) tidak termasuk dalam pesanan ini.";
         }
@@ -297,7 +327,7 @@ class OutboundScanService
      */
     public function progress(Outbound $outbound): array
     {
-        $outbound->load('items.product');
+        $outbound->load('items.product', 'bundles.bundle');
 
         return [
             'resi_verified' => $outbound->isResiVerified(),
@@ -310,6 +340,15 @@ class OutboundScanService
                 'scanned' => $item->scanned_quantity,
                 'quantity' => $item->quantity,
                 'completed' => $item->isFullyScanned(),
+            ])->all(),
+            // Yang discan tetap barangnya satu per satu; ini hanya keterangan
+            // asal-usul, supaya panel bisa menyebut paket apa yang sedang
+            // dirakit operator alih-alih menampilkan barang lepas tanpa konteks.
+            'bundles' => $outbound->bundles->map(fn (OutboundBundle $bundle) => [
+                'sku' => $bundle->bundle?->sku,
+                'name' => $bundle->bundle?->name,
+                'quantity' => $bundle->quantity,
+                'composition' => $bundle->composition,
             ])->all(),
         ];
     }

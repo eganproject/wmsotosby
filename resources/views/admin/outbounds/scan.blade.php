@@ -191,6 +191,36 @@
                         </p>
                     </div>
 
+                    {{--
+                        Paket yang sedang dirakit operator.
+
+                        Daftar di bawah berisi barang lepas, dan tanpa kartu
+                        ini jumlahnya tidak cocok dengan apa pun yang tertulis
+                        di label paket — operator memegang satu label bertulis
+                        "Paket Servis 10K ×2" sementara layar meminta tujuh
+                        barang yang seolah tak berhubungan.
+                    --}}
+                    @if ($outbound->bundles->isNotEmpty())
+                        <div class="border-b border-ink-100 bg-ink-950 px-5 py-3.5 text-white">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-white/50">Isi paket yang dirakit</p>
+                            <ul class="mt-2 space-y-1.5">
+                                @foreach ($outbound->bundles as $bundle)
+                                    <li class="flex items-center justify-between gap-3 text-xs">
+                                        <span class="min-w-0 truncate">
+                                            <span class="font-mono text-white/60">{{ $bundle->bundle?->sku }}</span>
+                                            <span class="text-white/40">·</span>
+                                            {{ $bundle->bundle?->name }}
+                                        </span>
+                                        <span class="shrink-0 font-semibold">&times;{{ $bundle->quantity }}</span>
+                                    </li>
+                                @endforeach
+                            </ul>
+                            <p class="mt-2 text-[11px] leading-relaxed text-white/50">
+                                Yang discan tetap barangnya satu per satu — paketnya sendiri tidak punya barcode.
+                            </p>
+                        </div>
+                    @endif
+
                     <ul class="scrollbar-thin max-h-[28rem] divide-y divide-ink-50 overflow-y-auto">
                         @foreach ($outbound->items as $item)
                             <li class="px-5 py-3.5 transition" x-data="{ itemId: {{ $item->id }} }"

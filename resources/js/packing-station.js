@@ -25,6 +25,8 @@ export default function packingStation(config) {
 
         outbound: null,
         items: [],
+        /** Paket yang menghasilkan baris di items — keterangan, bukan yang discan. */
+        bundles: [],
         progress: null,
 
         /** Paket yang selesai diverifikasi pada sesi ini. */
@@ -154,6 +156,7 @@ export default function packingStation(config) {
 
             this.outbound = payload.outbound;
             this.items = payload.items;
+            this.bundles = payload.bundles ?? [];
             this.progress = payload.progress;
             this.urls = { ...this.urls, ...payload.urls };
             this.stage = 'item';
@@ -243,6 +246,7 @@ export default function packingStation(config) {
             this.stage = 'resi';
             this.outbound = null;
             this.items = [];
+            this.bundles = [];
             this.progress = null;
             this.code = '';
             this.focusInput();

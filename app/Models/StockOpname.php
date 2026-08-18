@@ -317,6 +317,11 @@ class StockOpname extends Model
     {
         return Product::query()
             ->where('is_active', true)
+            // Paket bundling tidak ikut dihitung: tidak ada wujudnya di rak,
+            // jadi tidak ada yang bisa dihitung petugas. Bila ikut terbawa,
+            // saldo tercatatnya nol dan hasil hitung berapa pun akan terbaca
+            // sebagai selisih yang harus dibukukan.
+            ->singles()
             ->when($scope === self::SCOPE_CATEGORY, fn (Builder $query) => $query->where('category', $value))
             ->when($scope === self::SCOPE_LOCATION, fn (Builder $query) => $query->where('location', $value));
     }

@@ -6,6 +6,7 @@ use App\Models\Outbound;
 use App\Models\ReturnReceipt;
 use App\Models\ReturnReceiptItem;
 use App\Models\ShipmentOrder;
+use App\Rules\NotABundle;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -50,7 +51,9 @@ class StoreReturnReceiptRequest extends FormRequest
             // Baris barang boleh dikosongkan bila resinya ada di data import —
             // isinya diambil otomatis saat scan resi.
             'items' => [$this->resiExistsInImport() ? 'nullable' : 'required', 'array'],
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            // Retur marketplace lewat scan resi memecah paketnya sendiri; yang
+            // dijaga di sini adalah isian manual, yang barangnya dipilih orang.
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id', new NotABundle('penerimaan retur')],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'items.*.good_quantity' => ['required', 'integer', 'min:0'],
             'items.*.damaged_quantity' => ['required', 'integer', 'min:0'],

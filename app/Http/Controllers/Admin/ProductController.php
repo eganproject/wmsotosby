@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -30,6 +31,11 @@ class ProductController extends Controller implements HasMiddleware
     public function index(Request $request): View
     {
         $products = $this->filtered($request)
+            // Ketersediaan paket dihitung di basis data, sekali jalan untuk
+            // seluruh halaman. Sengaja hanya di sini, bukan di filtered():
+            // fungsi itu juga dipakai sebagai sasaran update massal, dan
+            // kueri ber-selectSub tidak bisa dipakai untuk menulis.
+            ->withBundleAvailability()
             ->orderBy('name')
             ->paginate(10)
             ->withQueryString();
@@ -47,23 +53,41 @@ class ProductController extends Controller implements HasMiddleware
     public function export(Request $request, ProductExportService $exporter): StreamedResponse
     {
         return $exporter->download(
-            $this->filtered($request),
+            // Ketersediaan paket ikut dihitung di basis data. Tanpa ini,
+            // export memuat komponen setiap paket satu per satu sambil
+            // menulis barisnya — dan export adalah yang justru dijalankan
+            // saat datanya sudah banyak.
+            $this->filtered($request)->withBundleAvailability(),
             'stok-barang-'.now()->format('Y-m-d-Hi').'.xlsx',
         );
     }
 
     public function create(): View
     {
-        return view('admin.products.create');
+        return view('admin.products.create', [
+            'catalog' => $this->componentCatalog(),
+        ]);
     }
 
     public function store(StoreProductRequest $request): RedirectResponse
     {
-        $product = Product::create($request->validated());
+        $data = $request->validated();
+        $components = $data['components'] ?? [];
+        unset($data['components']);
+
+        $product = DB::transaction(function () use ($data, $components) {
+            $product = Product::create($data);
+
+            $this->syncRecipe($product, $components);
+
+            return $product;
+        });
 
         return redirect()
             ->route('admin.products.show', $product)
-            ->with('success', 'Barang berhasil ditambahkan.');
+            ->with('success', $product->isBundle()
+                ? "Paket {$product->sku} dibuat dengan ".count($components).' barang di dalamnya.'
+                : 'Barang berhasil ditambahkan.');
     }
 
     /**
@@ -72,23 +96,91 @@ class ProductController extends Controller implements HasMiddleware
     public function show(Product $product): View
     {
         return view('admin.products.show', [
-            'product' => $product,
-            'movements' => $product->movements()->with('user')->paginate(15),
+            'product' => $product->load([
+                'bundleComponents.component',
+                'partOfBundles.bundle',
+            ]),
+            // Paket tidak pernah punya mutasi, jadi kartunya tidak dimuat sama
+            // sekali — bukan dimuat lalu ditemukan kosong.
+            'movements' => $product->isBundle()
+                ? null
+                : $product->movements()->with('user')->paginate(15),
         ]);
     }
 
     public function edit(Product $product): View
     {
-        return view('admin.products.edit', compact('product'));
+        return view('admin.products.edit', [
+            'product' => $product->load('bundleComponents.component'),
+            'catalog' => $this->componentCatalog($product),
+        ]);
     }
 
     public function update(UpdateProductRequest $request, Product $product): RedirectResponse
     {
-        $product->update($request->validated());
+        $data = $request->validated();
+        $components = $data['components'] ?? [];
+        unset($data['components']);
+
+        DB::transaction(function () use ($product, $data, $components) {
+            $product->update($data);
+
+            $this->syncRecipe($product, $components);
+        });
 
         return redirect()
             ->route('admin.products.show', $product)
             ->with('success', 'Data barang berhasil diperbarui.');
+    }
+
+    /**
+     * Tulis ulang resep paket.
+     *
+     * Dihapus lalu dibuat kembali, bukan dicocokkan baris per baris: resepnya
+     * hanya beberapa baris, tidak ada yang merujuknya, dan menulis ulang
+     * seluruhnya membuat baris yang dihapus di layar benar-benar hilang tanpa
+     * perlu melacak mana yang berubah.
+     *
+     * Barang biasa selalu berakhir tanpa resep — termasuk paket yang baru saja
+     * dikembalikan menjadi barang biasa, yang resep lamanya harus ikut pergi
+     * supaya tidak diam-diam hidup lagi bila jenisnya diubah kembali.
+     *
+     * @param  array<int, array<string, mixed>>  $components
+     */
+    protected function syncRecipe(Product $product, array $components): void
+    {
+        $product->bundleComponents()->delete();
+
+        if (! $product->isBundle()) {
+            return;
+        }
+
+        $product->bundleComponents()->createMany(
+            collect($components)->map(fn (array $row) => [
+                'component_id' => (int) $row['component_id'],
+                'quantity' => (int) $row['quantity'],
+            ])->all(),
+        );
+    }
+
+    /**
+     * Barang yang boleh menjadi isi paket.
+     *
+     * Hanya barang biasa — paket tidak boleh memuat paket. Yang sudah
+     * dinonaktifkan tetap ikut bila ia memang sudah tercantum di resep, sebab
+     * tanpa pilihannya barisnya jatuh ke kosong dan lenyap tanpa suara begitu
+     * formulirnya disimpan ulang.
+     */
+    protected function componentCatalog(?Product $product = null)
+    {
+        return Product::singles()
+            ->where(fn (Builder $query) => $query
+                ->where('is_active', true)
+                ->when($product, fn (Builder $query) => $query
+                    ->orWhereIn('id', $product->bundleComponents->pluck('component_id'))))
+            ->when($product, fn (Builder $query) => $query->whereKeyNot($product->id))
+            ->orderBy('name')
+            ->get(['id', 'sku', 'name', 'unit', 'stock']);
     }
 
     /**
@@ -114,9 +206,13 @@ class ProductController extends Controller implements HasMiddleware
 
         // Sasarannya ditentukan ulang di sisi server, bukan dipercaya dari
         // layar: saringan yang sama persis dipakai daftar, export, dan di sini.
-        $target = $data['scope'] === 'filtered'
+        // Batas menipis adalah setelan atas saldo di rak, dan paket bundling
+        // tidak punya rak. Disaring di sini juga, bukan hanya di layar: yang
+        // dicentang bisa saja paket, dan sasarannya memang ditentukan ulang
+        // di sisi server.
+        $target = ($data['scope'] === 'filtered'
             ? $this->filtered($request)
-            : Product::query()->whereIn('id', $data['ids']);
+            : Product::query()->whereIn('id', $data['ids']))->singles();
 
         $total = (clone $target)->count();
 
@@ -164,7 +260,7 @@ class ProductController extends Controller implements HasMiddleware
     protected function backToProducts(Request $request): RedirectResponse
     {
         return redirect()->route('admin.products.index', array_filter(
-            $request->only(['search', 'category', 'stock', 'status']),
+            $request->only(['search', 'category', 'stock', 'status', 'type']),
             fn ($value) => filled($value),
         ));
     }
@@ -181,11 +277,24 @@ class ProductController extends Controller implements HasMiddleware
      */
     protected function summary(Request $request): array
     {
+        /*
+            Keempat angka stok dihitung hanya atas barang biasa.
+
+            Paket bundling tidak punya saldo maupun batas minimum, jadi ikut
+            menghitungnya membuat "Stok Habis" menyebut angka yang isinya
+            justru paket yang komponennya menumpuk penuh di rak. Jumlah paket
+            tetap dilaporkan, hanya sebagai keterangannya sendiri — masih dalam
+            satu kueri yang sama.
+        */
+        $single = self::sqlValue(Product::TYPE_SINGLE);
+        $bundle = self::sqlValue(Product::TYPE_BUNDLE);
+
         $row = $this->scoped($request)
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw('COALESCE(SUM(stock), 0) as units')
-            ->selectRaw('SUM(CASE WHEN stock <= min_stock AND stock > 0 THEN 1 ELSE 0 END) as low')
-            ->selectRaw('SUM(CASE WHEN stock <= 0 THEN 1 ELSE 0 END) as out_of_stock')
+            ->selectRaw("SUM(CASE WHEN type = {$single} THEN 1 ELSE 0 END) as total")
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = {$single} THEN stock ELSE 0 END), 0) as units")
+            ->selectRaw("SUM(CASE WHEN type = {$single} AND stock <= min_stock AND stock > 0 THEN 1 ELSE 0 END) as low")
+            ->selectRaw("SUM(CASE WHEN type = {$single} AND stock <= 0 THEN 1 ELSE 0 END) as out_of_stock")
+            ->selectRaw("SUM(CASE WHEN type = {$bundle} THEN 1 ELSE 0 END) as bundles")
             ->first();
 
         return [
@@ -193,7 +302,21 @@ class ProductController extends Controller implements HasMiddleware
             'units' => (int) $row->units,
             'low' => (int) $row->low,
             'out' => (int) $row->out_of_stock,
+            'bundles' => (int) $row->bundles,
         ];
+    }
+
+    /**
+     * Tetapan jenis barang sebagai literal SQL.
+     *
+     * Disisipkan langsung, bukan sebagai binding: nilainya berasal dari
+     * tetapan kelas dan tidak pernah menyentuh masukan pengguna, sedangkan
+     * ekspresinya muncul lima kali dalam satu kueri — urutan binding yang
+     * harus dijaga sendiri di antara select dan where justru lebih mudah salah.
+     */
+    protected static function sqlValue(string $type): string
+    {
+        return "'".$type."'";
     }
 
     /**
@@ -201,10 +324,18 @@ class ProductController extends Controller implements HasMiddleware
      */
     protected function filtered(Request $request): Builder
     {
+        /*
+            Saringan kondisi stok selalu menyiratkan barang biasa.
+
+            Aman, menipis, dan habis semuanya dinilai dari kolom stok terhadap
+            batas minimum — dua angka yang pada paket bundling selamanya nol.
+            Tanpa ini, memilih "Habis" akan memunculkan seluruh paket yang ada,
+            termasuk yang komponennya menumpuk penuh di rak.
+        */
         return $this->scoped($request)
             ->when($request->input('stock') === 'low', fn ($query) => $query->lowStock()->where('stock', '>', 0))
-            ->when($request->input('stock') === 'out', fn ($query) => $query->where('stock', '<=', 0))
-            ->when($request->input('stock') === 'safe', fn ($query) => $query->whereColumn('stock', '>', 'min_stock'));
+            ->when($request->input('stock') === 'out', fn ($query) => $query->singles()->where('stock', '<=', 0))
+            ->when($request->input('stock') === 'safe', fn ($query) => $query->singles()->whereColumn('stock', '>', 'min_stock'));
     }
 
     /**
@@ -216,7 +347,9 @@ class ProductController extends Controller implements HasMiddleware
         return Product::query()
             ->search($request->string('search')->trim()->value())
             ->when($request->filled('category'), fn ($query) => $query->where('category', $request->string('category')))
-            ->when($request->filled('status'), fn ($query) => $query->where('is_active', $request->input('status') === 'active'));
+            ->when($request->filled('status'), fn ($query) => $query->where('is_active', $request->input('status') === 'active'))
+            ->when($request->input('type') === Product::TYPE_BUNDLE, fn ($query) => $query->bundles())
+            ->when($request->input('type') === Product::TYPE_SINGLE, fn ($query) => $query->singles());
     }
 
     public function destroy(Product $product): RedirectResponse
