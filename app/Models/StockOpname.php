@@ -275,11 +275,40 @@ class StockOpname extends Model
             $blockers[] = 'Sesi ini belum memiliki baris barang.';
         } elseif ($summary['counted'] === 0) {
             $blockers[] = 'Belum ada satu pun barang yang dihitung.';
-        } elseif ($summary['variance'] === 0) {
-            $blockers[] = 'Tidak ada selisih — hasil hitung sama dengan saldo tercatat.';
         }
 
+        /*
+            Tidak ada syarat harus ada selisih.
+
+            Sesi yang hasilnya cocok sepenuhnya adalah hasil opname yang paling
+            baik, bukan dokumen yang gagal — dan justru itu yang paling ingin
+            dilaporkan. Dulu sesi seperti itu tertolak dan menggantung sebagai
+            draft selamanya: tidak bisa ditutup, tidak bisa diarsipkan, tidak
+            bisa diunduh. Ikut tertolak pula sesi yang jumlahnya cocok tetapi
+            menemukan barang rusak, padahal temuan itu tetap harus dibukukan.
+
+            Menutupnya tanpa selisih tidak menggerakkan apa pun: penerapannya
+            melewati baris yang tidak berubah, jadi sesi bersih berakhir sebagai
+            catatan bahwa raknya sudah diperiksa — dan hanya itu.
+        */
+
         return $blockers;
+    }
+
+    /**
+     * Apakah persetujuan sesi ini benar-benar menggerakkan saldo.
+     *
+     * Dibaca dari angka yang dibukukan, bukan dari selisih yang tertulis saat
+     * menghitung: keduanya bisa berbeda bila stok sempat bergerak sebelum
+     * sesinya disetujui.
+     */
+    public function movedStock(): bool
+    {
+        return $this->items()
+            ->where(fn (Builder $query) => $query
+                ->where('applied_difference', '!=', 0)
+                ->orWhere('applied_damaged', '>', 0))
+            ->exists();
     }
 
     public function isReadyToPost(): bool

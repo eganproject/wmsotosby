@@ -171,15 +171,49 @@ class StockOpnameTest extends TestCase
         $this->assertDatabaseMissing('stock_movements', ['product_id' => $this->rem->id]);
     }
 
-    public function test_a_session_without_any_variance_is_refused(): void
+    /**
+     * Hasil yang cocok sepenuhnya adalah hasil opname yang paling baik, bukan
+     * dokumen yang gagal. Sesinya tetap ditutup — tanpa menggerakkan apa pun,
+     * dan tanpa mengaku telah menyesuaikan saldo.
+     */
+    public function test_a_session_without_any_variance_can_still_be_finished(): void
     {
         $opname = $this->openSession();
         $this->recordCounts($opname, [$this->oli->id => 10]);
 
         $this->actingAs($this->admin)->post(route('admin.opnames.submit', $opname))
-            ->assertSessionHas('error');
+            ->assertSessionHas('success', fn (string $message) => str_contains($message, 'tidak ada saldo yang berubah'));
 
-        $this->assertTrue($opname->refresh()->isDraft());
+        $this->assertTrue($opname->refresh()->isPosted());
+        $this->assertSame(10, $this->oli->refresh()->stock);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
+    /**
+     * Jumlahnya cocok, tetapi dua di antaranya rusak. Temuan itu tetap harus
+     * dibukukan — dulu sesi seperti ini ikut tertolak karena dianggap tidak
+     * punya selisih sama sekali.
+     */
+    public function test_damage_found_on_a_matching_count_is_still_booked(): void
+    {
+        $opname = $this->openSession();
+        $item = $opname->items->firstWhere('product_id', $this->oli->id);
+
+        $this->actingAs($this->admin)->post(route('admin.opnames.count', $opname), [
+            'counts' => [$item->id => 10],
+            'damaged' => [$item->id => 2],
+        ])->assertSessionHas('success');
+
+        $this->actingAs($this->admin)->post(route('admin.opnames.submit', $opname))
+            ->assertSessionHas('success', fn (string $message) => str_contains($message, 'Saldo stok sudah disesuaikan'));
+
+        $this->assertTrue($opname->refresh()->isPosted());
+
+        $this->oli->refresh();
+
+        // Rusak ditambahkan ke saldo rusak, bukan dipotong dari yang bagus.
+        $this->assertSame(10, $this->oli->stock);
+        $this->assertSame(2, $this->oli->damaged_stock);
     }
 
     public function test_a_session_with_nothing_counted_is_refused(): void

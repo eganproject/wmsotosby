@@ -124,8 +124,15 @@ class ApprovalController extends Controller implements HasMiddleware
                 ->with('error', collect($exception->errors())->flatten()->implode(' '));
         }
 
+        // Stok opname yang hasilnya cocok sepenuhnya tetap disetujui, tetapi
+        // tidak ada saldo yang bergerak — dan itu tidak boleh dilaporkan
+        // sebagai pembaruan stok.
+        $moved = ! method_exists($document, 'movedStock') || $document->movedStock();
+
         return $this->backToInbox($request)
-            ->with('success', "Dokumen {$document->code} disetujui. Stok telah diperbarui.");
+            ->with('success', $moved
+                ? "Dokumen {$document->code} disetujui. Stok telah diperbarui."
+                : "Dokumen {$document->code} disetujui. Hasilnya cocok dengan catatan — tidak ada saldo yang berubah.");
     }
 
     public function reject(Request $request, string $type, int $id): RedirectResponse

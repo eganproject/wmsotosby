@@ -292,8 +292,20 @@ class StockOpnameController extends Controller implements HasMiddleware
         }
 
         return back()->with('success', $selfApprove
-            ? "Stok opname {$opname->code} diterapkan. Saldo stok sudah disesuaikan."
+            ? $this->appliedMessage($opname)
             : "Stok opname {$opname->code} diajukan dan menunggu persetujuan.");
+    }
+
+    /**
+     * Sesi yang hasilnya cocok sepenuhnya tetap boleh ditutup — tetapi tidak
+     * boleh dilaporkan seakan-akan ada saldo yang disesuaikan. Yang dibaca
+     * adalah angka yang benar-benar dibukukan, bukan niatnya.
+     */
+    protected function appliedMessage(StockOpname $opname): string
+    {
+        return $opname->movedStock()
+            ? "Stok opname {$opname->code} diterapkan. Saldo stok sudah disesuaikan."
+            : "Stok opname {$opname->code} selesai. Hasil hitung cocok dengan catatan — tidak ada saldo yang berubah.";
     }
 
     public function approve(StockOpname $opname): RedirectResponse
@@ -306,7 +318,7 @@ class StockOpnameController extends Controller implements HasMiddleware
             return back()->with('error', collect($exception->errors())->flatten()->implode(' '));
         }
 
-        return back()->with('success', "Stok opname {$opname->code} diterapkan. Saldo stok sudah disesuaikan.");
+        return back()->with('success', $this->appliedMessage($opname));
     }
 
     public function withdraw(StockOpname $opname): RedirectResponse
