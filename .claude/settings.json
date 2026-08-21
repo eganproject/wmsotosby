@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -)",
+      "Bash(DB_DATABASE=wmsotosby_bundle_check php artisan migrate --force)",
+      "Bash(DB_DATABASE=wmsotosby_bundle_check php artisan tinker --execute=\"require 'C:/Users/user/AppData/Local/Temp/claude/c--laragon-www-wmsotosby/cad8ce2d-cce7-4d01-8745-f15241d0dfab/scratchpad/bundle_check.php';\")",
+      "Bash(DB_DATABASE=wmsotosby_bundle_check php artisan migrate:rollback --step=1 --force)",
+      "Bash(DB_DATABASE=wmsotosby_bundle_check php artisan tinker --execute=\"echo collect\\(\\\\Illuminate\\\\Support\\\\Facades\\\\DB::select\\('SHOW COLUMNS FROM products'\\)\\)->pluck\\('Field'\\)->implode\\(', '\\).PHP_EOL; echo 'produk tersisa: '.\\\\App\\\\Models\\\\Product::count\\(\\).PHP_EOL; echo 'tabel paket: '.\\(\\\\Illuminate\\\\Support\\\\Facades\\\\Schema::hasTable\\('product_bundle_items'\\) ? 'MASIH ADA' : 'terhapus'\\).PHP_EOL;\")",
+      "Bash(./vendor/bin/pint --test)",
+      "Bash(grep -n 'Baris Barang\\\\|items as $item\\\\|<table' resources/views/admin/outbounds/show.blade.php)",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(DB_DATABASE=wmsotosby_bundle_check php artisan tinker --execute=\"require 'C:/Users/user/AppData/Local/Temp/claude/c--laragon-www-wmsotosby/cad8ce2d-cce7-4d01-8745-f15241d0dfab/scratchpad/rilis2_check.php';\")",
+      "Bash(grep -v \"min_stock\\\\|damaged_stock\\\\|stock_api\\\\|StockService\\\\|availableStock\\\\|setStock\\\\|//\")",
+      "Bash(git add *)",
+      "Bash(git commit -m '@ *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(grep -n 'buildLines\\($data\\\\['\\\\''items'\\\\''\\\\]' app/Http/Controllers/Admin/OutboundController.php)",
+      "Bash(grep -v \"^\\\\s*$\")",
+      "Bash(sed -i 's|    public function withValidator\\(Validator \\\\$validator\\): void\\\\n    {|&|' app/Http/Requests/Admin/Concerns/RejectsBundleLines.php)",
+      "Bash(perl -0pi -e 's/\\(public function withValidator\\\\\\(Validator \\\\$validator\\\\\\): void\\\\s*\\\\{\\)/$1\\\\n        fwrite\\(STDERR, \"WITHVALIDATOR DIPANGGIL\\\\\\\\n\"\\);/' app/Http/Requests/Admin/Concerns/RejectsBundleLines.php)",
+      "Bash(perl -0pi -e 's/\\(public function rules\\\\\\(\\\\\\): array\\\\s*\\\\{\\\\s*return \\\\[\\\\s*.date. => \\\\[.required., .date.\\\\],\\)/fwrite\\(STDERR, \"RULES DIPANGGIL: \".static::class.\"\\\\\\\\n\"\\);\\\\n        $1/' app/Http/Requests/Admin/StoreInboundRequest.php)",
+      "Bash(perl -0pi -e 's|fwrite\\\\\\(STDERR, .STATUS: .*?\\\\n|fwrite\\(STDERR, \"\\\\\\\\nSTATUS: \".\\\\$response->getStatusCode\\(\\).\" -> \".\\\\$response->headers->get\\(\"Location\"\\).\"\\\\\\\\n\"\\);\\\\n|s' tests/Feature/Admin/TmpDebugTest.php)",
+      "Bash(perl -0pi -e \"s|fwrite\\\\\\(STDERR, 'ERRORS|fwrite\\(STDERR, 'INBOUNDS: '.\\\\\\\\\\\\\\\\App\\\\\\\\\\\\\\\\Models\\\\\\\\\\\\\\\\Inbound::count\\(\\).\\\\\"\\\\\\\\\\\\\\\\n\\\\\"\\);\\\\n        fwrite\\(STDERR, 'ERRORS|\" tests/Feature/Admin/TmpDebugTest.php)",
+      "Bash(php -i)",
+      "Bash(grep -n 'protected array $columns' -A 16 app/Services/ProductExportService.php app/Services/StockReportExportService.php app/Services/RestockExportService.php app/Services/StockMovementExportService.php)"
+    ]
+  }
+}

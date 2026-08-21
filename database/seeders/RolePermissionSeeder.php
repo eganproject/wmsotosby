@@ -48,6 +48,7 @@ class RolePermissionSeeder extends Seeder
             'opnames.delete' => 'Menghapus sesi stok opname',
             'opnames.post' => 'Mengajukan hasil stok opname',
             'opnames.approve' => 'Menyetujui stok opname',
+            'opnames.export' => 'Export hasil stok opname ke Excel',
         ],
         'Penyesuaian Stok' => [
             'adjustments.view' => 'Melihat penyesuaian stok',
@@ -178,7 +179,7 @@ class RolePermissionSeeder extends Seeder
                 'imports.view', 'imports.create', 'imports.cancel',
                 'suppliers.view', 'suppliers.create',
                 'adjustments.view', 'adjustments.create', 'adjustments.update', 'adjustments.post',
-                'opnames.view', 'opnames.create', 'opnames.update', 'opnames.post',
+                'opnames.view', 'opnames.create', 'opnames.update', 'opnames.post', 'opnames.export',
                 'disposals.view', 'disposals.create', 'disposals.post',
             ])->pluck('id'),
         );

@@ -181,7 +181,8 @@ php artisan optimize:clear
 ### Izin baru
 
 Sebagian pembaruan memperkenalkan izin baru — misalnya `reports.view` untuk
-Laporan Stok, atau `imports.cancel` untuk menandai resi batal. Izin itu
+Laporan Stok, `imports.cancel` untuk menandai resi batal, atau
+`opnames.export` untuk mengunduh hasil stok opname. Izin itu
 tersimpan sebagai baris di basis data, bukan di kode, jadi ia belum ada di
 server sampai seedernya dijalankan lagi:
 

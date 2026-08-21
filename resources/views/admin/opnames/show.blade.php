@@ -28,6 +28,14 @@
                     </form>
                 @endcan
             @else
+                @can('opnames.export')
+                    {{-- data-no-ajax: unduhan berkas tidak boleh lewat navigasi AJAX. --}}
+                    <x-ui.button :href="route('admin.opnames.export', $opname)"
+                                 variant="secondary" icon="document" data-no-ajax>
+                        Export Excel
+                    </x-ui.button>
+                @endcan
+
                 @include('admin.partials.approval-actions', ['document' => $opname, 'prefix' => 'opnames'])
             @endif
         </x-slot>

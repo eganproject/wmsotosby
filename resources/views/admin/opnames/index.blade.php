@@ -126,6 +126,18 @@
                                             </a>
                                         @endif
 
+                                        {{-- Hasil sesi yang sudah ditutup boleh diarsipkan ke Excel. --}}
+                                        @can('opnames.export')
+                                            @unless ($opname->isEditable())
+                                                <a href="{{ route('admin.opnames.export', $opname) }}" data-no-ajax
+                                                   title="Export hasil ke Excel"
+                                                   class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-100 hover:text-ink-950">
+                                                    <x-icon name="document" class="h-4 w-4" />
+                                                    <span class="sr-only">Export hasil ke Excel</span>
+                                                </a>
+                                            @endunless
+                                        @endcan
+
                                         @can('opnames.delete')
                                             @if ($opname->isEditable())
                                                 <x-ui.confirm-delete :action="route('admin.opnames.destroy', $opname)"

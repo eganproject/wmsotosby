@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\StockOpname;
 use App\Models\StockOpnameItem;
 use App\Services\ApprovalService;
+use App\Services\OpnameExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -15,6 +16,7 @@ use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Stok opname: menghitung fisik barang di rak, lalu menyelaraskan saldonya.
@@ -42,6 +44,7 @@ class StockOpnameController extends Controller implements HasMiddleware
             new Middleware('can:opnames.delete', only: ['destroy']),
             new Middleware('can:opnames.post', only: ['submit', 'withdraw']),
             new Middleware('can:opnames.approve', only: ['approve']),
+            new Middleware('can:opnames.export', only: ['export']),
         ];
     }
 
@@ -250,6 +253,25 @@ class StockOpnameController extends Controller implements HasMiddleware
     protected function normalizeCount(mixed $value): ?int
     {
         return $value === null || $value === '' ? null : (int) $value;
+    }
+
+    /**
+     * Unduh hasil sesi sebagai berkas Excel.
+     *
+     * Hanya sesi yang hitungannya sudah ditutup — diajukan atau diterapkan.
+     * Selama sesi masih berjalan, berkas ini akan membawa keluar saldo
+     * tercatat yang justru sengaja disembunyikan dari petugas penghitung,
+     * dan satu unduhan sudah cukup untuk membatalkan seluruh gunanya.
+     */
+    public function export(StockOpname $opname, OpnameExportService $exporter): StreamedResponse|RedirectResponse
+    {
+        if ($opname->isEditable()) {
+            return back()->with('error', 'Sesi ini masih dihitung. Ajukan hasilnya dulu sebelum diunduh.');
+        }
+
+        $opname->load(['user', 'submitter', 'approver']);
+
+        return $exporter->download($opname, 'stok-opname-'.$opname->code.'.xlsx');
     }
 
     /**

@@ -100,6 +100,7 @@ Route::middleware('auth')
         Route::post('disposals/{disposal}/withdraw', [DamagedStockController::class, 'withdraw'])->name('disposals.withdraw');
         Route::resource('disposals', DamagedStockController::class)->except(['edit', 'update']);
 
+        Route::get('opnames/{opname}/export', [StockOpnameController::class, 'export'])->name('opnames.export');
         Route::get('opnames/{opname}/station', [StockOpnameStationController::class, 'show'])->name('opnames.station');
         Route::get('opnames/{opname}/station/progress', [StockOpnameStationController::class, 'progress'])->name('opnames.station.progress');
         Route::post('opnames/{opname}/station/lookup', [StockOpnameStationController::class, 'lookup'])->name('opnames.station.lookup');
