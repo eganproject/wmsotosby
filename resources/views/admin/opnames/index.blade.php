@@ -104,11 +104,27 @@
 
                                 <td class="px-6 py-4">
                                     <div class="flex items-center justify-end gap-1">
-                                        <a href="{{ route('admin.opnames.show', $opname) }}"
-                                           class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink-950 px-3 text-xs font-medium text-white transition hover:bg-ink-800">
-                                            <x-icon :name="$opname->isEditable() ? 'pencil' : 'eye'" class="h-3.5 w-3.5" />
-                                            {{ $opname->isEditable() ? 'Hitung' : 'Lihat' }}
-                                        </a>
+                                        {{-- Sesi yang masih berjalan dibuka langsung di stasiun
+                                             hitung: itulah yang dicari petugas dari daftar ini. --}}
+                                        @if ($opname->isEditable() && auth()->user()->can('opnames.update'))
+                                            <a href="{{ route('admin.opnames.station', $opname) }}"
+                                               class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink-950 px-3 text-xs font-medium text-white transition hover:bg-ink-800">
+                                                <x-icon name="search" class="h-3.5 w-3.5" />
+                                                Hitung
+                                            </a>
+
+                                            <a href="{{ route('admin.opnames.show', $opname) }}"
+                                               class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-ink-500 transition hover:bg-ink-100 hover:text-ink-950">
+                                                <x-icon name="eye" class="h-3.5 w-3.5" />
+                                                Daftar
+                                            </a>
+                                        @else
+                                            <a href="{{ route('admin.opnames.show', $opname) }}"
+                                               class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink-950 px-3 text-xs font-medium text-white transition hover:bg-ink-800">
+                                                <x-icon :name="$opname->isEditable() ? 'pencil' : 'eye'" class="h-3.5 w-3.5" />
+                                                {{ $opname->isEditable() ? 'Hitung' : 'Lihat' }}
+                                            </a>
+                                        @endif
 
                                         @can('opnames.delete')
                                             @if ($opname->isEditable())

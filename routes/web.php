@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockApiAllowedIpController;
 use App\Http\Controllers\Admin\StockMovementController;
 use App\Http\Controllers\Admin\StockOpnameController;
+use App\Http\Controllers\Admin\StockOpnameStationController;
 use App\Http\Controllers\Admin\StockReportController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\UserController;
@@ -99,6 +100,10 @@ Route::middleware('auth')
         Route::post('disposals/{disposal}/withdraw', [DamagedStockController::class, 'withdraw'])->name('disposals.withdraw');
         Route::resource('disposals', DamagedStockController::class)->except(['edit', 'update']);
 
+        Route::get('opnames/{opname}/station', [StockOpnameStationController::class, 'show'])->name('opnames.station');
+        Route::get('opnames/{opname}/station/progress', [StockOpnameStationController::class, 'progress'])->name('opnames.station.progress');
+        Route::post('opnames/{opname}/station/lookup', [StockOpnameStationController::class, 'lookup'])->name('opnames.station.lookup');
+        Route::post('opnames/{opname}/station/count', [StockOpnameStationController::class, 'count'])->name('opnames.station.count');
         Route::post('opnames/{opname}/count', [StockOpnameController::class, 'count'])->name('opnames.count');
         Route::post('opnames/{opname}/submit', [StockOpnameController::class, 'submit'])->name('opnames.submit');
         Route::post('opnames/{opname}/approve', [StockOpnameController::class, 'approve'])->name('opnames.approve');

@@ -119,8 +119,10 @@ class StockOpnameController extends Controller implements HasMiddleware
             return $opname;
         });
 
+        // Langkah berikutnya setelah sesi dibuka selalu sama: mulai menghitung.
+        // Yang tidak berhak mengisi hitungan tetap diantar ke daftarnya.
         return redirect()
-            ->route('admin.opnames.show', $opname)
+            ->route($request->user()->can('opnames.update') ? 'admin.opnames.station' : 'admin.opnames.show', $opname)
             ->with('success', "Sesi {$opname->code} dibuka dengan {$products->count()} barang untuk dihitung.");
     }
 
@@ -130,10 +132,15 @@ class StockOpnameController extends Controller implements HasMiddleware
         // di halaman ini yang benar-benar dimuat.
         $opname->load('user');
 
+        // Selisih per baris hanya boleh dibaca yang berwenang menyetujui.
+        // Saringan "berselisih" adalah cara termudah mengetahui angka sistem
+        // tanpa pernah melihatnya, jadi ia ikut ditutup selama sesi berjalan.
+        $maySeeVariance = ! $opname->isEditable() || $request->user()->can('opnames.approve');
+
         $items = $opname->items()
             ->with(['product', 'counter'])
             ->when($request->string('filter')->value() === 'uncounted', fn ($query) => $query->whereNull('counted_quantity'))
-            ->when($request->string('filter')->value() === 'variance', fn ($query) => $query
+            ->when($maySeeVariance && $request->string('filter')->value() === 'variance', fn ($query) => $query
                 ->whereNotNull('counted_quantity')
                 ->whereColumn('counted_quantity', '!=', 'system_quantity'))
             ->when($request->filled('search'), fn ($query) => $query
@@ -142,12 +149,16 @@ class StockOpnameController extends Controller implements HasMiddleware
                     ->orWhere('sku', 'like', '%'.$request->string('search')->trim().'%')
                     ->orWhere('barcode', 'like', '%'.$request->string('search')->trim().'%')))
             ->join('products', 'products.id', '=', 'stock_opname_items.product_id')
-            ->orderBy('products.name')
+            // Urut lokasi rak, bukan abjad: petugas menyisir gudang mengikuti
+            // rak, dan daftar berurutan nama membuat urutan layar tidak pernah
+            // sama dengan urutan jalan kakinya. Barang tanpa lokasi jatuh ke
+            // akhir daftar supaya tidak menghadang yang punya rak.
+            ->orderByRaw('products.location IS NULL, products.location, products.name')
             ->select('stock_opname_items.*')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
-        return view('admin.opnames.show', compact('opname', 'items'));
+        return view('admin.opnames.show', compact('opname', 'items', 'maySeeVariance'));
     }
 
     /**

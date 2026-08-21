@@ -12,6 +12,13 @@
                       :back="route('admin.opnames.index')">
         <x-slot name="actions">
             @if ($opname->isEditable())
+                {{-- Jalur utama saat menghitung: satu kolom, tanpa gulir. --}}
+                @can('opnames.update')
+                    <x-ui.button :href="route('admin.opnames.station', $opname)" variant="secondary" icon="search">
+                        Stasiun Hitung
+                    </x-ui.button>
+                @endcan
+
                 @can('opnames.post')
                     <form method="POST" action="{{ route('admin.opnames.submit', $opname) }}">
                         @csrf
@@ -36,6 +43,17 @@
         $variance = $summary['variance'];
         $accuracy = $opname->accuracyPercentage();
         $accuracyTone = $accuracy >= 95 ? 'emerald' : ($accuracy >= 80 ? 'amber' : 'red');
+
+        /*
+            Selama sesi masih berjalan, saldo tercatat tidak diperlihatkan
+            kepada siapa pun yang menghitung — angka sistem yang terlihat
+            membuat petugas menyalinnya alih-alih benar-benar menghitung.
+
+            Angka selisihnya tetap terbuka bagi yang berwenang menyetujui:
+            merekalah yang menilai hasil, bukan yang mengumpulkannya. Setelah
+            sesi terkunci, semuanya terbuka untuk semua yang boleh melihat.
+        */
+        $reveal = $maySeeVariance;
     @endphp
 
     <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -43,17 +61,33 @@
                         :hint="$opname->progressPercentage().'% SKU sudah dihitung'" />
         <x-ui.stat-card label="Belum Dihitung" :value="$total - $counted" icon="clock"
                         hint="Barisnya tidak akan mengubah stok" />
-        <x-ui.stat-card label="Lebih" :value="'+'.number_format($summary['surplus'], 0, ',', '.')"
-                        icon="trending-up" :hint="$variance.' SKU berselisih'" />
-        <x-ui.stat-card label="Kurang" :value="'-'.number_format($summary['shortage'], 0, ',', '.')"
-                        icon="warning" hint="Unit yang hilang dari catatan" />
+
+        @if ($reveal)
+            <x-ui.stat-card label="Lebih" :value="'+'.number_format($summary['surplus'], 0, ',', '.')"
+                            icon="trending-up" :hint="$variance.' SKU berselisih'" />
+            <x-ui.stat-card label="Kurang" :value="'-'.number_format($summary['shortage'], 0, ',', '.')"
+                            icon="warning" hint="Unit yang hilang dari catatan" />
+        @else
+            <x-ui.stat-card label="Petugas" :value="$contributors->count()" icon="users"
+                            hint="Mengerjakan sesi ini" />
+            <x-ui.stat-card label="Selisih" value="—" icon="lock"
+                            hint="Terbuka setelah hasil diajukan" />
+        @endif
     </div>
 
     <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div class="lg:col-span-2">
             @if ($opname->isEditable())
-                {{-- Scan melompat ke barisnya; tidak ada perjalanan ke server. --}}
-                <div x-data="opnameCounter()" class="space-y-4">
+                {{--
+                    Scan melompat ke barisnya bila ada di halaman ini; bila
+                    tidak, pencariannya dilanjutkan ke server alih-alih buntu.
+                --}}
+                <div x-data="opnameCounter({
+                        url: '{{ route('admin.opnames.station.count', $opname) }}',
+                        searchUrl: '{{ route('admin.opnames.show', ['opname' => $opname->id, 'filter' => request('filter')]) }}',
+                        progressUrl: '{{ route('admin.opnames.station.progress', $opname) }}',
+                        counted: {{ $counted }},
+                     })" class="space-y-4">
                     <div class="rounded-2xl border border-ink-950 bg-ink-950 p-4 shadow-lift">
                         <form data-no-ajax @submit.prevent="jump()">
                             <div class="relative">
@@ -66,8 +100,32 @@
                             </div>
                         </form>
                         <p class="mt-2 h-4 text-[11px]" :class="message.type === 'error' ? 'text-red-300' : 'text-white/50'"
-                           x-text="message.text || 'Barangnya langsung disorot dan kursor pindah ke kolom hitung.'"></p>
+                           x-text="message.text || 'Tidak ada di halaman ini? Pencariannya dilanjutkan ke seluruh sesi.'"></p>
                     </div>
+
+                    {{--
+                        Baris di bawah dirender server, jadi yang bisa dikabarkan
+                        hanyalah bahwa isinya sudah berubah — memuat ulang sendiri
+                        akan menghapus angka yang sedang diketik petugas.
+                    --}}
+                    <div x-cloak x-show="behind !== 0"
+                         class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2.5 text-xs text-amber-800 ring-1 ring-inset ring-amber-200">
+                        <span class="flex items-start gap-2">
+                            <x-icon name="users" class="mt-px h-3.5 w-3.5 shrink-0" />
+                            <span x-text="liveNote"></span>
+                        </span>
+
+                        <a href="{{ request()->fullUrl() }}" data-no-ajax
+                           class="font-semibold text-amber-900 underline underline-offset-2">Muat ulang</a>
+                    </div>
+
+                    @if (request('search'))
+                        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink-50 px-4 py-2.5 text-xs text-ink-600">
+                            <span>Disaring untuk &ldquo;{{ request('search') }}&rdquo;</span>
+                            <a href="{{ route('admin.opnames.show', ['opname' => $opname->id, 'filter' => request('filter')]) }}"
+                               class="font-medium text-ink-950 underline underline-offset-2">Tampilkan semua</a>
+                        </div>
+                    @endif
 
                     <form method="POST" action="{{ route('admin.opnames.count', $opname) }}"
                           @submit="pruneUntouched()">
@@ -76,11 +134,13 @@
                         <div class="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card">
                             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-5 py-3">
                                 <div class="flex flex-wrap items-center gap-1.5">
-                                    @foreach ([
+                                    {{-- "Berselisih" menunjukkan angka sistem tanpa
+                                         menampilkannya, jadi ikut ditutup saat menghitung. --}}
+                                    @foreach (array_filter([
                                         '' => 'Semua',
                                         'uncounted' => 'Belum dihitung',
-                                        'variance' => 'Berselisih',
-                                    ] as $value => $label)
+                                        'variance' => $reveal ? 'Berselisih' : null,
+                                    ]) as $value => $label)
                                         <a href="{{ route('admin.opnames.show', array_filter(['opname' => $opname->id, 'filter' => $value, 'search' => request('search')])) }}"
                                            @class([
                                                'rounded-lg px-2.5 py-1 text-xs font-medium transition',
@@ -107,7 +167,11 @@
                                         <li class="px-5 py-3.5 transition"
                                             data-sku="{{ strtoupper($item->product->sku) }}"
                                             data-barcode="{{ strtoupper($item->product->barcode ?? '') }}"
-                                            :class="highlighted === {{ $item->id }} && 'bg-amber-50'">
+                                            :class="{
+                                                'bg-amber-50': highlighted === {{ $item->id }},
+                                                'bg-emerald-50': state[{{ $item->id }}]?.type === 'saved',
+                                                'bg-red-50': state[{{ $item->id }}]?.type === 'error',
+                                            }">
                                             {{--
                                                 Di ponsel barisnya menumpuk: nama barang di atas,
                                                 lalu selisih dan kolom hitung berdampingan dengan
@@ -117,25 +181,49 @@
                                                 <div class="min-w-0 flex-1">
                                                     <x-ui.sku :value="$item->product->sku" />
                                                     <p class="mt-1 truncate text-sm font-medium text-ink-950">{{ $item->product->name }}</p>
+                                                    {{--
+                                                        Yang disebut di sini hanya yang menolong petugas
+                                                        menemukan barangnya — rak dan satuannya. Saldo
+                                                        tercatat sengaja tidak ikut: angka yang terlihat
+                                                        akan disalin, bukan dihitung.
+                                                    --}}
                                                     <p class="text-[11px] text-ink-400">
-                                                        Tercatat {{ $item->system_quantity }} {{ $item->product->unit }}
+                                                        @if ($item->product->location)
+                                                            Rak {{ $item->product->location }} &middot;
+                                                        @endif
+                                                        satuan {{ $item->product->unit }}
                                                         @if ($item->counted_at)
                                                             &middot; dihitung {{ $item->counted_at->format('H:i') }}
                                                             @if ($item->counter) oleh {{ $item->counter->name }} @endif
                                                         @endif
                                                     </p>
+
+                                                    {{-- Hasil simpan otomatis baris ini. --}}
+                                                    <p x-cloak x-show="state[{{ $item->id }}]"
+                                                       class="mt-1 text-[11px] font-medium"
+                                                       :class="state[{{ $item->id }}]?.type === 'saved' ? 'text-emerald-600' : 'text-red-600'"
+                                                       x-text="state[{{ $item->id }}]?.message"></p>
                                                 </div>
 
                                                 <div class="flex items-center gap-3">
                                                     @php $difference = $item->difference(); @endphp
                                                     <div class="w-20 shrink-0 text-right sm:w-24">
-                                                        <span @class([
-                                                            'inline-flex rounded-lg px-2 py-1 text-sm font-semibold tabular-nums',
-                                                            'bg-ink-50 text-ink-300' => ! $item->isCounted(),
-                                                            'bg-ink-50 text-ink-500' => $item->isCounted() && $difference === 0,
-                                                            'bg-emerald-50 text-emerald-700' => $difference > 0,
-                                                            'bg-red-50 text-red-700' => $difference < 0,
-                                                        ])>{{ $item->differenceLabel() }}</span>
+                                                        @if ($reveal)
+                                                            <span @class([
+                                                                'inline-flex rounded-lg px-2 py-1 text-sm font-semibold tabular-nums',
+                                                                'bg-ink-50 text-ink-300' => ! $item->isCounted(),
+                                                                'bg-ink-50 text-ink-500' => $item->isCounted() && $difference === 0,
+                                                                'bg-emerald-50 text-emerald-700' => $difference > 0,
+                                                                'bg-red-50 text-red-700' => $difference < 0,
+                                                            ])>{{ $item->differenceLabel() }}</span>
+                                                        @else
+                                                            {{-- Keadaan barisnya, bukan selisihnya. --}}
+                                                            <span @class([
+                                                                'inline-flex rounded-lg px-2 py-1 text-[11px] font-medium',
+                                                                'bg-ink-50 text-ink-400' => ! $item->isCounted(),
+                                                                'bg-emerald-50 text-emerald-700' => $item->isCounted(),
+                                                            ])>{{ $item->isCounted() ? 'Terhitung' : 'Belum' }}</span>
+                                                        @endif
                                                     </div>
 
                                                     {{-- Nilai awal ikut dikirim agar baris yang sudah
@@ -152,8 +240,10 @@
                                                                    name="counts[{{ $item->id }}]"
                                                                    value="{{ $item->counted_quantity }}"
                                                                    data-count-input="{{ $item->id }}"
+                                                                   data-product="{{ $item->product_id }}"
                                                                    data-baseline="{{ $item->counted_quantity }}"
                                                                    placeholder="—"
+                                                                   @change="autosave({{ $item->id }})"
                                                                    @disabled(! auth()->user()->can('opnames.update'))
                                                                    class="h-12 w-full rounded-xl border-ink-200 text-center text-base font-semibold tabular-nums shadow-sm focus:border-ink-950 focus:ring-ink-950 sm:h-11 sm:text-sm">
                                                         </div>
@@ -174,6 +264,7 @@
                                                                    data-damaged-input="{{ $item->id }}"
                                                                    data-baseline="{{ $item->damaged_quantity ?: '' }}"
                                                                    placeholder="0"
+                                                                   @change="autosave({{ $item->id }})"
                                                                    @disabled(! auth()->user()->can('opnames.update'))
                                                                    class="h-12 w-full rounded-xl border-ink-200 text-center text-base font-semibold tabular-nums text-red-700 shadow-sm placeholder:font-normal placeholder:text-ink-300 focus:border-red-500 focus:ring-red-500 sm:h-11 sm:text-sm">
                                                         </div>
@@ -261,10 +352,12 @@
                         <dt class="text-ink-500">Barang dipotret</dt>
                         <dd class="font-medium text-ink-950">{{ $total }} SKU</dd>
                     </div>
-                    <div class="flex items-center justify-between gap-3">
-                        <dt class="text-ink-500">Berselisih</dt>
-                        <dd class="font-medium text-ink-950">{{ $variance }} SKU</dd>
-                    </div>
+                    @if ($reveal)
+                        <div class="flex items-center justify-between gap-3">
+                            <dt class="text-ink-500">Berselisih</dt>
+                            <dd class="font-medium text-ink-950">{{ $variance }} SKU</dd>
+                        </div>
+                    @endif
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-ink-500">Dibuka oleh</dt>
                         <dd class="font-medium text-ink-950">{{ $opname->user?->name ?? '—' }}</dd>
@@ -275,7 +368,23 @@
                     Akurasi menjawab pertanyaan yang sebenarnya dicari dari
                     opname: seberapa bisa dipercaya catatan stok selama ini.
                 --}}
-                @if ($counted > 0)
+                @if (! $reveal)
+                    {{--
+                        Yang menghitung tidak diberi tahu seberapa jauh
+                        angkanya dari catatan: begitu diketahui, hitungan
+                        berikutnya akan dicocokkan, bukan dihitung.
+                    --}}
+                    <p class="flex items-start gap-2 border-t border-ink-100 pt-4 text-[11px] leading-relaxed text-ink-500">
+                        <x-icon name="lock" class="mt-px h-3.5 w-3.5 shrink-0" />
+                        <span>
+                            Saldo tercatat dan selisihnya disembunyikan selama sesi berjalan, supaya
+                            hasil hitung benar-benar berasal dari rak. Angkanya terbuka setelah hasil
+                            diajukan untuk disetujui.
+                        </span>
+                    </p>
+                @endif
+
+                @if ($reveal && $counted > 0)
                     <div class="border-t border-ink-100 pt-4">
                         <div class="flex items-baseline justify-between gap-3">
                             <p class="text-xs font-semibold uppercase tracking-wider text-ink-400">Akurasi Catatan</p>
