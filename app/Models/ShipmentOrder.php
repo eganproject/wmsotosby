@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Satu pesanan hasil import Ginee, dikenali dari nomor resinya.
@@ -400,6 +401,100 @@ class ShipmentOrder extends Model
                 ->whereRaw(self::EFFECTIVE_DATE.' >= ?', [$date]))
             ->when(static::dateFilterValue($range->to), fn (Builder $query, string $date) => $query
                 ->whereRaw(self::EFFECTIVE_DATE.' <= ?', [$date]));
+    }
+
+    /* ------------------------------------------------------ resi kembar -- */
+
+    /**
+     * Resi yang berbagi nomor pesanan dengan resi lain.
+     *
+     * Satu pesanan seharusnya berangkat dengan satu resi. Kalau nomor pesanan
+     * yang sama muncul dengan dua nomor resi, berarti resinya pernah dicetak
+     * ulang atau diganti pihak marketplace — dan resi yang lama tetap tinggal
+     * di sistem sebagai pekerjaan yang menunggu. Selama tidak ada yang
+     * menyadarinya, pesanan itu berisiko dipacking dan dikirim dua kali.
+     *
+     * Kembarnya dicari atas seluruh data, bukan atas rentang tanggal yang
+     * sedang dipilih. Resi pengganti hampir selalu masuk pada hari yang
+     * berbeda dengan resi aslinya; membatasi pencarian pada satu hari justru
+     * menyembunyikan persis pasangan yang ingin ditemukan, dan halaman akan
+     * melapor "tidak ada duplikat" dengan penuh percaya diri.
+     */
+    public function scopeDuplicated(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('shipment_orders.order_number')
+            ->where('shipment_orders.order_number', '!=', '')
+            ->whereIn('shipment_orders.order_number', static::duplicatedOrderNumbers());
+    }
+
+    /**
+     * Nomor pesanan yang punya lebih dari satu resi.
+     *
+     * Dihitung dengan COUNT(DISTINCT tracking_number), bukan COUNT(*), supaya
+     * jawabannya tetap benar seandainya indeks unik pada nomor resi suatu saat
+     * dilepas: dua baris dengan resi yang sama persis bukan pesanan berkembar,
+     * dan menyebutnya begitu hanya akan mengirim orang mencari paket kedua
+     * yang tidak pernah ada.
+     */
+    protected static function duplicatedOrderNumbers(): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('shipment_orders', 'kembar')
+            ->select('kembar.order_number')
+            ->whereNotNull('kembar.order_number')
+            ->where('kembar.order_number', '!=', '')
+            ->groupBy('kembar.order_number')
+            ->havingRaw('COUNT(DISTINCT kembar.tracking_number) > 1');
+    }
+
+    /**
+     * Urutan khusus daftar resi kembar: pasangannya berdampingan.
+     *
+     * Kelompok yang anggotanya paling baru masuk berada di atas, sehingga
+     * duplikat yang barusan tercipta langsung terlihat tanpa menyusuri halaman.
+     * Tanpa pengelompokan ini kedua resi satu pesanan bisa terpisah sangat
+     * jauh — yang lama berumur seminggu, yang baru hari ini — dan justru
+     * perbandingan berdampinganlah yang membuat duplikatnya bisa dinilai.
+     */
+    public function scopeGroupedByOrder(Builder $query): Builder
+    {
+        return $query
+            ->orderByRaw('(SELECT MAX(kembar.created_at) FROM shipment_orders AS kembar'
+                .' WHERE kembar.order_number = shipment_orders.order_number) DESC')
+            ->orderBy('shipment_orders.order_number')
+            ->orderByDesc('shipment_orders.created_at')
+            ->orderByDesc('shipment_orders.id');
+    }
+
+    /**
+     * Resi lain yang berbagi nomor pesanan dengan sekumpulan resi.
+     *
+     * Dipakai daftar untuk menandai barisnya tanpa satu query per baris: satu
+     * permintaan untuk seluruh halaman, berapa pun barisnya.
+     *
+     * @param  iterable<int, self>  $orders
+     * @return array<string, array<int, string>>  nomor pesanan => nomor resinya
+     */
+    public static function twinsFor(iterable $orders): array
+    {
+        $numbers = collect($orders)
+            ->pluck('order_number')
+            ->filter(fn ($number) => filled($number))
+            ->unique()
+            ->values();
+
+        if ($numbers->isEmpty()) {
+            return [];
+        }
+
+        return static::query()
+            ->whereIn('order_number', $numbers)
+            ->orderBy('id')
+            ->get(['id', 'order_number', 'tracking_number'])
+            ->groupBy('order_number')
+            ->filter(fn ($group) => $group->pluck('tracking_number')->unique()->count() > 1)
+            ->map(fn ($group) => $group->pluck('tracking_number')->all())
+            ->all();
     }
 
     /**

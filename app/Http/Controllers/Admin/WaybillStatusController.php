@@ -24,6 +24,11 @@ use Illuminate\View\View;
  *
  * Kecuali yang terakhir: pembatalan memang datang dari luar gudang, entah
  * terbaca dari berkas import atau ditandai petugas.
+ *
+ * Di samping tahap ada satu saringan lagi yang berdiri sendiri: resi kembar —
+ * satu nomor pesanan yang punya lebih dari satu resi. Itu bukan tahap, melainkan
+ * kecurigaan yang perlu diperiksa orang, dan bisa mengenai resi pada tahap mana
+ * pun.
  */
 class WaybillStatusController extends Controller implements HasMiddleware
 {
@@ -37,8 +42,9 @@ class WaybillStatusController extends Controller implements HasMiddleware
     public function __invoke(Request $request): View
     {
         $stage = $request->string('stage')->value();
+        $onlyDuplicates = $request->boolean('duplicate');
 
-        $orders = $this->filtered($request)
+        $orders = $this->narrowed($request)
             ->with([
                 'items',
                 'canceller',
@@ -48,14 +54,26 @@ class WaybillStatusController extends Controller implements HasMiddleware
                     ->withSum('items', 'scanned_quantity'),
             ])
             ->atStage($stage)
-            ->latestFirst()
+            // Saat resi kembar yang dicari, pasangannya harus berdampingan;
+            // di luar itu urutan biasa yang berlaku.
+            ->when($onlyDuplicates,
+                fn (Builder $query) => $query->groupedByOrder(),
+                fn (Builder $query) => $query->latestFirst())
             ->paginate(20)
             ->withQueryString();
 
         return view('admin.imports.status', [
             'orders' => $orders,
             'stage' => $stage,
+            'onlyDuplicates' => $onlyDuplicates,
             'counts' => $this->counts($request),
+            // Angka kartu resi kembar sengaja dihitung tanpa penanda duplikat
+            // itu sendiri — persis seperti tahap: kartunya adalah pemilihnya,
+            // jadi menekannya tidak boleh mengubah angkanya sendiri.
+            'duplicates' => $this->filtered($request)->duplicated()->count(),
+            // Penanda baris kembar untuk halaman yang sedang tampil. Satu query
+            // untuk seluruh halaman, bukan satu per baris.
+            'twins' => ShipmentOrder::twinsFor($orders->items()),
             // Dropdown sengaja memuat seluruh ekspedisi, bukan hanya yang lolos
             // saringan: memilih ekspedisi lain harus tetap mungkin.
             'couriers' => ShipmentOrder::query()
@@ -80,6 +98,21 @@ class WaybillStatusController extends Controller implements HasMiddleware
     }
 
     /**
+     * Saringan lengkap: termasuk penanda "hanya resi kembar".
+     *
+     * Berbeda dengan tahap, penanda ini memang membatasi kartu tahap juga.
+     * Tahap memilah habis seluruh resi sehingga keempat kartunya harus tetap
+     * berjumlah total; "resi kembar" bukan tahap, ia menyempitkan seluruh
+     * halaman — dan kartu tahap yang tetap menghitung resi yang sudah tidak
+     * tampil hanya akan membuat orang menghitung ulang dan mendapati beda.
+     */
+    protected function narrowed(Request $request): Builder
+    {
+        return $this->filtered($request)
+            ->when($request->boolean('duplicate'), fn (Builder $query) => $query->duplicated());
+    }
+
+    /**
      * Jumlah resi per tahap, untuk saringan yang sedang berlaku.
      *
      * Sebelumnya angka ini dihitung atas seluruh data sementara tabelnya sudah
@@ -92,10 +125,10 @@ class WaybillStatusController extends Controller implements HasMiddleware
     protected function counts(Request $request): array
     {
         return [
-            ShipmentOrder::STAGE_AWAITING_QC => $this->filtered($request)->awaitingQc()->count(),
-            ShipmentOrder::STAGE_CHECKED => $this->filtered($request)->qualityChecked()->count(),
-            ShipmentOrder::STAGE_SHIPPED => $this->filtered($request)->shipped()->count(),
-            ShipmentOrder::STAGE_CANCELLED => $this->filtered($request)->cancelled()->count(),
+            ShipmentOrder::STAGE_AWAITING_QC => $this->narrowed($request)->awaitingQc()->count(),
+            ShipmentOrder::STAGE_CHECKED => $this->narrowed($request)->qualityChecked()->count(),
+            ShipmentOrder::STAGE_SHIPPED => $this->narrowed($request)->shipped()->count(),
+            ShipmentOrder::STAGE_CANCELLED => $this->narrowed($request)->cancelled()->count(),
         ];
     }
 }

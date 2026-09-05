@@ -7,7 +7,7 @@
     sedang menyaring satu ekspedisi akan terlempar ke seluruh daftar.
 --}}
 @php
-    $filters = array_filter(request()->only(['stage', 'search', 'courier']), fn ($value) => filled($value));
+    $filters = array_filter(request()->only(['stage', 'search', 'courier', 'duplicate']), fn ($value) => filled($value));
 @endphp
 
 @can('imports.cancel')

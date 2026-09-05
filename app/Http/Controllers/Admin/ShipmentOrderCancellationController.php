@@ -79,7 +79,7 @@ class ShipmentOrderCancellationController extends Controller implements HasMiddl
     protected function backToStatus(Request $request): RedirectResponse
     {
         return redirect()->route('admin.imports.status', array_filter(
-            $request->only(['stage', 'search', 'courier']),
+            $request->only(['stage', 'search', 'courier', 'duplicate']),
             fn ($value) => filled($value),
         ));
     }

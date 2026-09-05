@@ -39,6 +39,15 @@
                    'hint' => 'Batal sebelum berangkat — jangan dikirim',
                    'count' => $counts[\App\Models\ShipmentOrder::STAGE_CANCELLED], 'ring' => 'ring-red-200', 'text' => 'text-red-700'],
         ];
+
+        /*
+            Resi lain yang berbagi nomor pesanan dengan baris ini. Sudah
+            disiapkan controller untuk seluruh halaman sekaligus, jadi
+            memanggilnya per baris tidak menambah query.
+        */
+        $twinsOf = fn ($order) => collect($twins[(string) $order->order_number] ?? [])
+            ->reject(fn (string $resi) => $resi === $order->tracking_number)
+            ->values();
     @endphp
 
     <div class="grid grid-cols-2 gap-4 xl:grid-cols-5">
@@ -69,10 +78,60 @@
         @endforeach
     </div>
 
+    {{--
+        Kartu resi kembar berdiri di luar barisan kartu tahap.
+
+        Keempat tahap memilah habis seluruh resi dan berjumlah persis "Semua
+        Resi"; menyisipkan kartu kelima yang menghitung hal lain ke dalam
+        barisan itu akan merusak penjumlahan yang justru menjadi janjinya.
+        Kartu ini penyaring tersendiri, dan bisa dipakai bersama tahap mana pun.
+
+        Kartunya hanya muncul kalau memang ada yang kembar — atau selama
+        saringannya aktif, supaya selalu ada jalan mematikannya kembali.
+    --}}
+    @if ($duplicates > 0 || $onlyDuplicates)
+        <a href="{{ route('admin.imports.status', array_filter(array_merge(request()->query(), [
+               'duplicate' => $onlyDuplicates ? null : 1,
+               'page' => null,
+           ]))) }}"
+           @class([
+               'group mt-4 flex items-center gap-4 rounded-2xl border p-5 shadow-card transition hover:shadow-lift',
+               'border-ink-950 bg-white ring-1 ring-inset ring-red-200' => $onlyDuplicates,
+               'border-red-200 bg-red-50/60' => ! $onlyDuplicates,
+           ])>
+            <span @class([
+                'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition',
+                'bg-ink-950 text-white' => $onlyDuplicates,
+                'bg-white text-red-600 ring-1 ring-inset ring-red-200 group-hover:bg-red-100' => ! $onlyDuplicates,
+            ])>
+                <x-icon name="warning" class="h-4 w-4" />
+            </span>
+
+            <div class="min-w-0 flex-1">
+                <p class="text-xs font-medium uppercase tracking-wider text-red-700">Resi Duplikat</p>
+                <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500">
+                    Satu nomor pesanan punya lebih dari satu resi — biasanya resi cetak ulang.
+                    Yang lama masih menunggu dipacking, dan pesanannya berisiko dikirim dua kali.
+                    {{ $onlyDuplicates ? 'Klik lagi untuk menampilkan seluruh resi.' : 'Klik untuk melihat daftarnya.' }}
+                </p>
+            </div>
+
+            <p class="shrink-0 text-2xl font-semibold tracking-tight text-red-700">
+                {{ number_format($duplicates, 0, ',', '.') }}
+            </p>
+        </a>
+    @endif
+
     <form method="GET" action="{{ route('admin.imports.status') }}" data-auto-submit
           class="my-5 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card">
         {{-- Tahap yang sedang dipilih ikut terbawa saat mencari. --}}
         <input type="hidden" name="stage" value="{{ $stage }}">
+
+        {{-- Begitu pula penanda resi kembar: mencari nama pembeli tidak boleh
+             diam-diam mengembalikan daftar ke seluruh resi. --}}
+        @if ($onlyDuplicates)
+            <input type="hidden" name="duplicate" value="1">
+        @endif
 
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div class="relative flex-1">
@@ -98,7 +157,7 @@
 
             <div class="flex items-center gap-2">
                 <x-ui.button type="submit" variant="secondary" icon="filter" class="flex-1 sm:flex-none">Terapkan</x-ui.button>
-                @if (request()->hasAny(['search', 'courier', 'stage', 'from', 'to']))
+                @if (request()->hasAny(['search', 'courier', 'stage', 'duplicate', 'from', 'to', 'range']))
                     <x-ui.button :href="route('admin.imports.status')" variant="ghost" size="icon" title="Reset filter">
                         <x-icon name="refresh" class="h-4 w-4" />
                     </x-ui.button>
@@ -109,8 +168,11 @@
 
     <div class="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card">
         @if ($orders->isEmpty())
-            <x-ui.empty-state icon="search" title="Tidak ada resi pada tahap ini"
-                              description="Resi muncul di sini setelah berkas pesanan dari Ginee diimport." />
+            <x-ui.empty-state :icon="$onlyDuplicates ? 'check-circle' : 'search'"
+                              :title="$onlyDuplicates ? 'Tidak ada resi kembar' : 'Tidak ada resi pada tahap ini'"
+                              :description="$onlyDuplicates
+                                  ? 'Setiap nomor pesanan pada saringan ini hanya punya satu resi.'
+                                  : 'Resi muncul di sini setelah berkas pesanan dari Ginee diimport.'" />
         @else
             <div class="hidden overflow-x-auto md:block">
                 <table class="min-w-full divide-y divide-ink-100 text-left">
@@ -126,12 +188,27 @@
                     </thead>
                     <tbody class="divide-y divide-ink-50">
                         @foreach ($orders as $order)
-                            @php $orderStage = $order->stage(); @endphp
+                            @php
+                                $orderStage = $order->stage();
+                                $twin = $twinsOf($order);
+                            @endphp
                             <tr class="transition hover:bg-ink-50/50">
                                 <td class="px-6 py-4 align-top">
-                                    <p class="font-mono text-sm font-medium text-ink-950">{{ $order->tracking_number }}</p>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="font-mono text-sm font-medium text-ink-950">{{ $order->tracking_number }}</p>
+                                        @if ($twin->isNotEmpty())
+                                            <x-ui.badge variant="danger" icon="warning">Duplikat</x-ui.badge>
+                                        @endif
+                                    </div>
                                     @if ($order->marketplace)
                                         <p class="mt-1 text-[11px] text-ink-400">{{ $order->marketplace }}</p>
+                                    @endif
+                                    {{-- Nomor kembarannya disebut apa adanya: tanpa itu petugas
+                                         harus mencari sendiri resi mana yang dimaksud. --}}
+                                    @if ($twin->isNotEmpty())
+                                        <p class="mt-1 font-mono text-[11px] text-red-600">
+                                            Pesanan sama: {{ $twin->implode(', ') }}
+                                        </p>
                                     @endif
                                 </td>
 
@@ -191,7 +268,10 @@
 
             <div class="divide-y divide-ink-50 md:hidden">
                 @foreach ($orders as $order)
-                    @php $orderStage = $order->stage(); @endphp
+                    @php
+                        $orderStage = $order->stage();
+                        $twin = $twinsOf($order);
+                    @endphp
                     <div class="p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
@@ -210,7 +290,16 @@
 
                         <p class="mt-2 text-xs text-ink-500">{{ $order->stageDetail() }}</p>
 
+                        @if ($twin->isNotEmpty())
+                            <p class="mt-2 font-mono text-[11px] text-red-600">
+                                Duplikat · pesanan sama: {{ $twin->implode(', ') }}
+                            </p>
+                        @endif
+
                         <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                            @if ($twin->isNotEmpty())
+                                <x-ui.badge variant="danger" icon="warning">Duplikat</x-ui.badge>
+                            @endif
                             <x-ui.badge variant="outline">{{ $order->totalQuantity() }} unit</x-ui.badge>
                             <x-ui.badge variant="outline">{{ $order->items->count() }} SKU</x-ui.badge>
                             @if ($order->outbound)
