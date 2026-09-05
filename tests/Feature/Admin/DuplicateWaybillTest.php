@@ -190,14 +190,29 @@ class DuplicateWaybillTest extends TestCase
     }
 
     /**
-     * Halaman yang tidak punya duplikat tidak boleh menumbuhkan kartunya:
-     * peringatan bernilai nol hanya melatih mata untuk melewatinya.
+     * Kartunya tetap ada meski nol.
+     *
+     * Pemeriksaan yang hanya muncul saat sedang bermasalah tidak akan pernah
+     * ditemukan orang yang belum tahu ia ada — dan "nol duplikat" justru kabar
+     * yang ingin dibaca sebelum kurir datang.
      */
-    public function test_the_card_stays_hidden_when_nothing_is_duplicated(): void
+    public function test_the_card_still_reports_when_nothing_is_duplicated(): void
     {
         $this->makeOrder('SPXID111', 'INV-1');
 
-        $this->open()->assertDontSee('Resi Duplikat');
+        $response = $this->open();
+
+        $this->assertSame(0, $response->viewData('duplicates'));
+        $response->assertSee('Resi Duplikat');
+    }
+
+    /**
+     * Halaman yang belum berisi resi sama sekali pun tetap menampilkannya:
+     * di sanalah orang pertama kali melihat fiturnya ada.
+     */
+    public function test_the_card_is_there_on_an_empty_page(): void
+    {
+        $this->open()->assertSee('Resi Duplikat');
     }
 
     public function test_the_card_appears_once_something_is_duplicated(): void

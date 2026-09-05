@@ -86,41 +86,59 @@
         barisan itu akan merusak penjumlahan yang justru menjadi janjinya.
         Kartu ini penyaring tersendiri, dan bisa dipakai bersama tahap mana pun.
 
-        Kartunya hanya muncul kalau memang ada yang kembar — atau selama
-        saringannya aktif, supaya selalu ada jalan mematikannya kembali.
+        Kartunya tetap ditampilkan meski nol — sama seperti kartu tahap.
+        Pemeriksaan yang hanya muncul saat sedang bermasalah tidak akan pernah
+        ditemukan orang yang belum tahu ia ada, dan "nol duplikat" adalah kabar
+        yang memang ingin dibaca sebelum kurir datang. Yang berubah hanya
+        nadanya: merah saat ada yang perlu diperiksa, tenang saat bersih.
     --}}
-    @if ($duplicates > 0 || $onlyDuplicates)
-        <a href="{{ route('admin.imports.status', array_filter(array_merge(request()->query(), [
-               'duplicate' => $onlyDuplicates ? null : 1,
-               'page' => null,
-           ]))) }}"
-           @class([
-               'group mt-4 flex items-center gap-4 rounded-2xl border p-5 shadow-card transition hover:shadow-lift',
-               'border-ink-950 bg-white ring-1 ring-inset ring-red-200' => $onlyDuplicates,
-               'border-red-200 bg-red-50/60' => ! $onlyDuplicates,
-           ])>
-            <span @class([
-                'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition',
-                'bg-ink-950 text-white' => $onlyDuplicates,
-                'bg-white text-red-600 ring-1 ring-inset ring-red-200 group-hover:bg-red-100' => ! $onlyDuplicates,
-            ])>
-                <x-icon name="warning" class="h-4 w-4" />
-            </span>
+    @php $adaDuplikat = $duplicates > 0; @endphp
 
-            <div class="min-w-0 flex-1">
-                <p class="text-xs font-medium uppercase tracking-wider text-red-700">Resi Duplikat</p>
-                <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500">
+    <a href="{{ route('admin.imports.status', array_filter(array_merge(request()->query(), [
+           'duplicate' => $onlyDuplicates ? null : 1,
+           'page' => null,
+       ]))) }}"
+       @class([
+           'group mt-4 flex items-center gap-4 rounded-2xl border p-5 shadow-card transition hover:shadow-lift',
+           'border-ink-950 bg-white ring-1 ring-inset ring-red-200' => $onlyDuplicates,
+           'border-red-200 bg-red-50/60' => ! $onlyDuplicates && $adaDuplikat,
+           'border-ink-100 bg-white' => ! $onlyDuplicates && ! $adaDuplikat,
+       ])>
+        <span @class([
+            'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition',
+            'bg-ink-950 text-white' => $onlyDuplicates,
+            'bg-white text-red-600 ring-1 ring-inset ring-red-200 group-hover:bg-red-100' => ! $onlyDuplicates && $adaDuplikat,
+            'bg-ink-50 text-ink-400 group-hover:bg-ink-100' => ! $onlyDuplicates && ! $adaDuplikat,
+        ])>
+            <x-icon :name="$adaDuplikat ? 'warning' : 'check-circle'" class="h-4 w-4" />
+        </span>
+
+        <div class="min-w-0 flex-1">
+            <p @class([
+                'text-xs font-medium uppercase tracking-wider',
+                'text-red-700' => $adaDuplikat,
+                'text-ink-400' => ! $adaDuplikat,
+            ])>Resi Duplikat</p>
+            <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500">
+                @if ($adaDuplikat)
                     Satu nomor pesanan punya lebih dari satu resi — biasanya resi cetak ulang.
                     Yang lama masih menunggu dipacking, dan pesanannya berisiko dikirim dua kali.
                     {{ $onlyDuplicates ? 'Klik lagi untuk menampilkan seluruh resi.' : 'Klik untuk melihat daftarnya.' }}
-                </p>
-            </div>
-
-            <p class="shrink-0 text-2xl font-semibold tracking-tight text-red-700">
-                {{ number_format($duplicates, 0, ',', '.') }}
+                @else
+                    Tidak ada nomor pesanan yang punya lebih dari satu resi pada saringan ini —
+                    tidak ada paket yang berisiko dikirim dua kali.
+                @endif
             </p>
-        </a>
-    @endif
+        </div>
+
+        <p @class([
+            'shrink-0 text-2xl font-semibold tracking-tight',
+            'text-red-700' => $adaDuplikat,
+            'text-ink-950' => ! $adaDuplikat,
+        ])>
+            {{ number_format($duplicates, 0, ',', '.') }}
+        </p>
+    </a>
 
     <form method="GET" action="{{ route('admin.imports.status') }}" data-auto-submit
           class="my-5 flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-card">
