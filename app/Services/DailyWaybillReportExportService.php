@@ -32,10 +32,12 @@ class DailyWaybillReportExportService
 
     /**
      * @param  Collection<int, DailyWaybillReportRow>  $rows
+     * @param  array<string, int|float>  $summary
      */
     public function download(
         Collection $rows,
         DailyWaybillReportFilters $filters,
+        array $summary,
         string $filename,
     ): StreamedResponse {
         $spreadsheet = new Spreadsheet();
@@ -48,6 +50,11 @@ class DailyWaybillReportExportService
             config('app.name'),
             $filters->label(),
             now()->translatedFormat('d F Y H:i'),
+        ));
+        $sheet->setCellValue('A3', sprintf(
+            'Rata-rata %.2f resi/hari dari %d hari kalender',
+            $summary['average_per_day'],
+            $summary['period_days'],
         ));
 
         foreach ($this->columns as $index => [$label]) {
@@ -97,8 +104,10 @@ class DailyWaybillReportExportService
 
         $sheet->mergeCells([1, 1, $lastColumn, 1]);
         $sheet->mergeCells([1, 2, $lastColumn, 2]);
+        $sheet->mergeCells([1, 3, $lastColumn, 3]);
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
         $sheet->getStyle('A2')->getFont()->setSize(9)->getColor()->setRGB('6D6D6D');
+        $sheet->getStyle('A3')->getFont()->setSize(9)->getColor()->setRGB('6D6D6D');
 
         $header = $sheet->getStyle([1, $headerRow, $lastColumn, $headerRow]);
         $header->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');

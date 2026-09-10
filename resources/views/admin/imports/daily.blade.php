@@ -40,11 +40,13 @@
 
     <x-ui.tabs group="waybill" />
 
-    <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
+    <div class="grid grid-cols-2 gap-4 xl:grid-cols-5">
         <x-ui.stat-card label="Hari Aktif" :value="number_format($summary['days'], 0, ',', '.')"
                         icon="calendar" accent :hint="$filters->label()" />
         <x-ui.stat-card label="Total Resi" :value="number_format($summary['orders'], 0, ',', '.')"
                         icon="document" :hint="number_format($summary['units'], 0, ',', '.').' unit dipesan'" />
+        <x-ui.stat-card label="Rata-rata Resi" :value="number_format($summary['average_per_day'], 1, ',', '.').' / hari'"
+                        icon="chart" :hint="'Dari '.$summary['period_days'].' hari kalender pada filter'" />
         <x-ui.stat-card label="Belum QC" :value="number_format($summary['awaiting'], 0, ',', '.')"
                         icon="clock" hint="Masih membutuhkan pekerjaan packing" />
         <x-ui.stat-card label="Kesiapan" :value="$readiness.'%'"

@@ -68,6 +68,29 @@ class DailyWaybillReportTest extends TestCase
         foreach ($rows as $row) {
             $this->assertSame($row->total, $row->awaiting + $row->checked + $row->shipped + $row->cancelled);
         }
+
+        $summary = $this->response(['from' => '2026-09-01', 'to' => '2026-09-02'])->viewData('summary');
+        $this->assertSame(2, $summary['period_days']);
+        $this->assertSame(2.0, $summary['average_per_day']);
+    }
+
+    public function test_average_uses_every_calendar_day_in_the_filter_including_empty_dates(): void
+    {
+        $first = Carbon::parse('2026-09-01');
+        $third = Carbon::parse('2026-09-03');
+
+        foreach (range(1, 3) as $number) {
+            $this->makeOrder('SPX', "RESI-A{$number}", $first, 1);
+        }
+        $this->makeOrder('JNE', 'RESI-B1', $third, 1);
+
+        $summary = $this->response([
+            'from' => '2026-09-01', 'to' => '2026-09-03',
+        ])->viewData('summary');
+
+        $this->assertSame(4, $summary['orders']);
+        $this->assertSame(3, $summary['period_days']);
+        $this->assertEqualsWithDelta(4 / 3, $summary['average_per_day'], 0.001);
     }
 
     public function test_the_default_range_is_the_current_month(): void
@@ -181,10 +204,14 @@ class DailyWaybillReportTest extends TestCase
      */
     protected function rows(array $query = [])
     {
-        return collect($this->actingAs($this->admin)
+        return collect($this->response($query)->viewData('rows'));
+    }
+
+    protected function response(array $query = [])
+    {
+        return $this->actingAs($this->admin)
             ->get(route('admin.imports.daily', $query))
-            ->assertOk()
-            ->viewData('rows'));
+            ->assertOk();
     }
 
     protected function makeOrder(string $courier, string $tracking, Carbon $date, int $quantity): ShipmentOrder

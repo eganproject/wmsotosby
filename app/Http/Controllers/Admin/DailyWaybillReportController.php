@@ -32,7 +32,7 @@ class DailyWaybillReportController extends Controller implements HasMiddleware
         return view('admin.imports.daily', [
             'filters' => $filters,
             'rows' => $rows,
-            'summary' => $this->report->summary($rows),
+            'summary' => $this->report->summary($rows, $filters),
             'couriers' => $this->report->couriers(),
         ]);
     }
@@ -40,10 +40,12 @@ class DailyWaybillReportController extends Controller implements HasMiddleware
     public function export(Request $request, DailyWaybillReportExportService $exporter): StreamedResponse
     {
         $filters = DailyWaybillReportFilters::fromRequest($request);
+        $rows = $this->report->rows($filters);
 
         return $exporter->download(
-            $this->report->rows($filters),
+            $rows,
             $filters,
+            $this->report->summary($rows, $filters),
             'laporan-resi-harian-'.now()->format('Y-m-d-Hi').'.xlsx',
         );
     }

@@ -6,6 +6,7 @@ use App\Models\ShipmentOrder;
 use App\Support\DailyWaybillReportFilters;
 use App\Support\DailyWaybillReportRow;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -49,19 +50,49 @@ class DailyWaybillReportService
 
     /**
      * @param  Collection<int, DailyWaybillReportRow>  $rows
-     * @return array<string, int>
+     * @return array<string, int|float>
      */
-    public function summary(Collection $rows): array
+    public function summary(Collection $rows, DailyWaybillReportFilters $filters): array
     {
+        $orders = (int) $rows->sum('total');
+        $periodDays = $this->periodDays($rows, $filters);
+
         return [
             'days' => $rows->count(),
-            'orders' => $rows->sum('total'),
+            'period_days' => $periodDays,
+            'orders' => $orders,
+            'average_per_day' => $periodDays > 0 ? (float) $orders / $periodDays : 0.0,
             'units' => $rows->sum('units'),
             'awaiting' => $rows->sum('awaiting'),
             'checked' => $rows->sum('checked'),
             'shipped' => $rows->sum('shipped'),
             'cancelled' => $rows->sum('cancelled'),
         ];
+    }
+
+    /**
+     * Jumlah hari kalender pada saringan, termasuk tanggal tanpa resi.
+     *
+     * Untuk rentang terbuka maupun seluruh riwayat, sisi yang kosong diambil
+     * dari tanggal pertama atau terakhir yang benar-benar lolos saringan.
+     *
+     * @param  Collection<int, DailyWaybillReportRow>  $rows
+     */
+    protected function periodDays(Collection $rows, DailyWaybillReportFilters $filters): int
+    {
+        $from = $filters->range->from ?? $rows->min('date');
+        $to = $filters->range->to ?? $rows->max('date');
+
+        if (! $from || ! $to) {
+            return 0;
+        }
+
+        return rescue(function () use ($from, $to) {
+            $start = Carbon::createFromFormat('Y-m-d', $from)->startOfDay();
+            $end = Carbon::createFromFormat('Y-m-d', $to)->startOfDay();
+
+            return $start->greaterThan($end) ? 0 : (int) $start->diffInDays($end) + 1;
+        }, 0, report: false);
     }
 
     public function couriers(): Collection
