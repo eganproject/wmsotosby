@@ -135,13 +135,17 @@
                             <th class="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Tersedia</th>
                             <th class="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Batas</th>
                             <th class="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Laju</th>
+                            <th class="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-ink-500">Klasifikasi</th>
                             <th class="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-ink-500">Kondisi</th>
                             <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Saran Pesan</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-ink-50">
                         @foreach ($rows as $row)
-                            @php $badge = $row->urgencyBadge(); @endphp
+                            @php
+                                $badge = $row->urgencyBadge();
+                                $movementBadge = $row->movementBadge();
+                            @endphp
                             <tr class="transition hover:bg-ink-50/50">
                                 <td class="px-6 py-4 align-top">
                                     <a href="{{ route('admin.products.show', $row->id) }}"
@@ -186,6 +190,13 @@
                                 </td>
 
                                 <td class="px-4 py-4 align-top">
+                                    <x-ui.badge :variant="$movementBadge['variant']">{{ $movementBadge['label'] }}</x-ui.badge>
+                                    <p class="mt-1 text-[11px] tabular-nums text-ink-400">
+                                        {{ number_format($row->velocity30Days(), 1, ',', '.') }}/30 hari
+                                    </p>
+                                </td>
+
+                                <td class="px-4 py-4 align-top">
                                     <x-ui.badge :variant="$badge['variant']">{{ $badge['label'] }}</x-ui.badge>
                                 </td>
 
@@ -206,11 +217,14 @@
                 </table>
             </div>
 
-            {{-- Di ponsel angkanya disusun berpasangan; tabel delapan kolom yang
+            {{-- Di ponsel angkanya disusun berpasangan; tabel sembilan kolom yang
                  digulir mendatar praktis tidak terbaca. --}}
             <div class="divide-y divide-ink-50 lg:hidden">
                 @foreach ($rows as $row)
-                    @php $badge = $row->urgencyBadge(); @endphp
+                    @php
+                        $badge = $row->urgencyBadge();
+                        $movementBadge = $row->movementBadge();
+                    @endphp
                     <div class="p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
@@ -222,7 +236,10 @@
                                     {{ $row->sku }}{{ $row->location ? ' · '.$row->location : '' }}
                                 </p>
                             </div>
-                            <x-ui.badge :variant="$badge['variant']" class="shrink-0">{{ $badge['label'] }}</x-ui.badge>
+                            <div class="flex shrink-0 flex-col items-end gap-1">
+                                <x-ui.badge :variant="$movementBadge['variant']">{{ $movementBadge['label'] }}</x-ui.badge>
+                                <x-ui.badge :variant="$badge['variant']">{{ $badge['label'] }}</x-ui.badge>
+                            </div>
                         </div>
 
                         <div class="mt-3 grid grid-cols-4 gap-2 text-center">
@@ -248,6 +265,7 @@
 
                         <p class="mt-2 text-xs text-ink-500">
                             Batas {{ $row->minStock }} · keluar {{ number_format($row->perDay(), 1, ',', '.') }} {{ $row->unit }}/hari
+                            · {{ number_format($row->velocity30Days(), 1, ',', '.') }}/30 hari
                             @if ($row->needsRestock())
                                 · <span class="font-medium text-ink-700">{{ $row->reason() }}</span>
                             @endif
@@ -265,5 +283,6 @@
         keluar tetapi belum diproses — barangnya masih di rak, tetapi sudah dijanjikan ke pembeli.
         <span class="font-medium text-ink-500">Saran pesan</span> mengambil yang terbesar antara mengembalikan saldo ke
         batas menipis dan menutup kebutuhan {{ $filters->coverDays }} hari ke depan pada laju keluar sekarang.
+        Klasifikasi pergerakan memakai {{ \App\Support\StockVelocity::thresholdLabel() }}.
     </p>
 </x-app-layout>

@@ -234,6 +234,37 @@ class StockReportTest extends TestCase
         $this->assertSame('KMP-001', $byCover->items()[0]->sku);
     }
 
+    public function test_goods_are_explicitly_classified_and_filterable_by_normalized_velocity(): void
+    {
+        $fast = $this->makeProduct('FAST-001', 'Barang Cepat');
+        $medium = $this->makeProduct('MED-001', 'Barang Sedang');
+        $slow = $this->makeProduct('SLOW-001', 'Barang Lambat');
+
+        foreach ([$this->product, $fast, $medium, $slow] as $product) {
+            $this->receive($product, 100, Carbon::now()->subDays(20));
+        }
+
+        $this->ship($fast, 30, Carbon::now()->subDays(10));
+        $this->ship($medium, 10, Carbon::now()->subDays(10));
+        $this->ship($slow, 1, Carbon::now()->subDays(10));
+
+        $all = collect(app(StockReportService::class)->paginate($this->filters())->items())->keyBy('sku');
+
+        $this->assertSame('fast', $all['FAST-001']->movementClass());
+        $this->assertSame('medium', $all['MED-001']->movementClass());
+        $this->assertSame('slow', $all['SLOW-001']->movementClass());
+        $this->assertSame('non_moving', $all['FLT-OLI-STD']->movementClass());
+
+        $this->assertSame(['FAST-001'], collect(app(StockReportService::class)
+            ->paginate($this->filters(view: 'fast'))->items())->pluck('sku')->all());
+        $this->assertSame(['MED-001'], collect(app(StockReportService::class)
+            ->paginate($this->filters(view: 'medium'))->items())->pluck('sku')->all());
+        $this->assertSame(['SLOW-001'], collect(app(StockReportService::class)
+            ->paginate($this->filters(view: 'slow'))->items())->pluck('sku')->all());
+        $this->assertSame(['FLT-OLI-STD'], collect(app(StockReportService::class)
+            ->paginate($this->filters(view: 'mati'))->items())->pluck('sku')->all());
+    }
+
     /* --------------------------------------------------- halaman --------- */
 
     public function test_the_page_shows_the_report(): void
@@ -245,7 +276,8 @@ class StockReportTest extends TestCase
             ->assertOk()
             ->assertSee('Laporan Stok')
             ->assertSee('FLT-OLI-STD')
-            ->assertSee('Perputaran');
+            ->assertSee('Perputaran')
+            ->assertSee('Fast Moving');
     }
 
     public function test_an_unreadable_date_falls_back_to_the_default_period(): void

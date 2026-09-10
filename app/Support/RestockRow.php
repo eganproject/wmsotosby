@@ -65,6 +65,25 @@ class RestockRow
         return $this->outgoing / max(1, $this->days);
     }
 
+    /** Laju keluar yang disetarakan ke periode 30 hari untuk klasifikasi. */
+    public function velocity30Days(): float
+    {
+        return StockVelocity::equivalent30Days($this->outgoing, $this->days);
+    }
+
+    public function movementClass(): string
+    {
+        return StockVelocity::classify($this->outgoing, $this->days);
+    }
+
+    /**
+     * @return array{label: string, variant: string}
+     */
+    public function movementBadge(): array
+    {
+        return StockVelocity::badge($this->outgoing, $this->days);
+    }
+
     /** Berapa hari lagi yang tersedia akan habis pada laju sekarang. */
     public function daysOfCover(): ?float
     {

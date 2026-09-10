@@ -41,7 +41,7 @@
                             ? 'Belum ada barang keluar pada periode ini'
                             : 'Stok cukup untuk ± '.number_format($summary['cover'], 0, ',', '.').' hari lagi'" />
 
-        <x-ui.stat-card label="Tidak Bergerak" :value="number_format($summary['idle'], 0, ',', '.')"
+        <x-ui.stat-card label="Non-Moving" :value="number_format($summary['idle'], 0, ',', '.')"
                         icon="clock"
                         :hint="'Barang bersisa yang tidak keluar sama sekali selama '.$summary['days'].' hari'" />
     </div>
@@ -128,12 +128,16 @@
                             <th class="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Keluar</th>
                             <th class="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Akhir</th>
                             <th class="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Perputaran</th>
+                            <th class="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-ink-500">Klasifikasi</th>
                             <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">Perkiraan Habis</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-ink-50">
                         @foreach ($rows as $row)
-                            @php $badge = $row->urgencyBadge(); @endphp
+                            @php
+                                $badge = $row->urgencyBadge();
+                                $movementBadge = $row->movementBadge();
+                            @endphp
                             <tr class="transition hover:bg-ink-50/50">
                                 <td class="px-6 py-4 align-top">
                                     <a href="{{ route('admin.products.show', $row->id) }}"
@@ -179,6 +183,13 @@
                                     </p>
                                 </td>
 
+                                <td class="px-4 py-4 align-top">
+                                    <x-ui.badge :variant="$movementBadge['variant']">{{ $movementBadge['label'] }}</x-ui.badge>
+                                    <p class="mt-1 text-[11px] tabular-nums text-ink-400">
+                                        {{ number_format($row->velocity30Days(), 1, ',', '.') }} unit/30 hari
+                                    </p>
+                                </td>
+
                                 <td class="px-6 py-4 text-right align-top">
                                     <x-ui.badge :variant="$badge['variant']">{{ $badge['label'] }}</x-ui.badge>
                                     @if ($row->lastOutAt)
@@ -193,11 +204,14 @@
                 </table>
             </div>
 
-            {{-- Di ponsel angka disusun berpasangan label–nilai; tabel tujuh
+            {{-- Di ponsel angka disusun berpasangan label–nilai; tabel delapan
                  kolom yang digulir mendatar praktis tidak terbaca. --}}
             <div class="divide-y divide-ink-50 lg:hidden">
                 @foreach ($rows as $row)
-                    @php $badge = $row->urgencyBadge(); @endphp
+                    @php
+                        $badge = $row->urgencyBadge();
+                        $movementBadge = $row->movementBadge();
+                    @endphp
                     <div class="p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
@@ -209,7 +223,10 @@
                                     {{ $row->sku }}{{ $row->category ? ' · '.$row->category : '' }}
                                 </p>
                             </div>
-                            <x-ui.badge :variant="$badge['variant']" class="shrink-0">{{ $badge['label'] }}</x-ui.badge>
+                            <div class="flex shrink-0 flex-col items-end gap-1">
+                                <x-ui.badge :variant="$movementBadge['variant']">{{ $movementBadge['label'] }}</x-ui.badge>
+                                <x-ui.badge :variant="$badge['variant']">{{ $badge['label'] }}</x-ui.badge>
+                            </div>
                         </div>
 
                         <div class="mt-3 grid grid-cols-4 gap-2 text-center">
@@ -233,7 +250,8 @@
 
                         <p class="mt-2 text-xs text-ink-500">
                             Berputar {{ $row->turnoverLabel() }} ·
-                            rata-rata {{ number_format($row->perDay(), 1, ',', '.') }} {{ $row->unit }}/hari
+                            rata-rata {{ number_format($row->perDay(), 1, ',', '.') }} {{ $row->unit }}/hari ·
+                            setara {{ number_format($row->velocity30Days(), 1, ',', '.') }}/30 hari
                             @if ($row->damaged > 0)
                                 · <span class="font-medium text-red-600">{{ $row->damaged }} rusak</span>
                             @endif
@@ -249,5 +267,8 @@
     <p class="mt-4 text-xs leading-relaxed text-ink-400">
         Stok berkurang saat dokumen barang keluar disetujui, bukan saat barang selesai discan di stasiun packing.
         Paket yang sudah discan tetapi belum diproses karena itu belum muncul sebagai barang keluar di laporan ini.
+        Klasifikasi memakai laju yang disetarakan ke 30 hari:
+        {{ \App\Support\StockVelocity::thresholdLabel() }}.
+        Ambang dapat diubah lewat konfigurasi tanpa mengubah riwayat mutasi.
     </p>
 </x-app-layout>

@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use App\Support\StockReportFilters;
 use App\Support\StockReportRow;
+use App\Support\StockVelocity;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -151,6 +152,9 @@ class StockReportService
      */
     protected function base(StockReportFilters $filters): Builder
     {
+        $velocity = $this->velocityExpression($filters);
+        $thresholds = StockVelocity::thresholds();
+
         return DB::table('products as p')
             ->leftJoinSub($this->movements($filters), 'm', 'm.product_id', '=', 'p.id')
             /*
@@ -169,10 +173,23 @@ class StockReportService
             ))
             ->when($filters->category, fn (Builder $query, string $category) => $query->where('p.category', $category))
             ->when($filters->view === 'bergerak', fn (Builder $query) => $query->whereRaw('COALESCE(m.outgoing, 0) > 0'))
+            ->when($filters->view === 'fast', fn (Builder $query) => $query->whereRaw("{$velocity} >= ?", [$thresholds['fast']]))
+            ->when($filters->view === 'medium', fn (Builder $query) => $query
+                ->whereRaw("{$velocity} >= ?", [$thresholds['medium']])
+                ->whereRaw("{$velocity} < ?", [$thresholds['fast']]))
+            ->when($filters->view === 'slow', fn (Builder $query) => $query
+                ->whereRaw('COALESCE(m.outgoing, 0) > 0')
+                ->whereRaw("{$velocity} < ?", [$thresholds['medium']]))
             ->when($filters->view === 'mati', fn (Builder $query) => $query
                 ->whereRaw('COALESCE(m.outgoing, 0) = 0')
                 ->whereRaw(self::CLOSING.' > 0'))
             ->when($filters->view === 'menipis', fn (Builder $query) => $query->whereRaw(self::CLOSING.' <= p.min_stock'));
+    }
+
+    /** Kecepatan keluar yang disetarakan ke 30 hari. */
+    protected function velocityExpression(StockReportFilters $filters): string
+    {
+        return '(COALESCE(m.outgoing, 0) * '.StockVelocity::NORMALIZED_DAYS.'.0 / '.$filters->days().')';
     }
 
     /**

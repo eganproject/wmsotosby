@@ -33,6 +33,8 @@ class StockReportExportService
         ['Keluar', 'outgoing'],
         ['Stok Akhir', 'closing'],
         ['Rata-rata Keluar/Hari', 'per_day'],
+        ['Kecepatan Setara 30 Hari', 'velocity_30_days'],
+        ['Klasifikasi Pergerakan', 'movement_class'],
         ['Perputaran (kali)', 'turnover'],
         ['Perkiraan Habis (hari)', 'cover'],
         ['Terakhir Keluar', 'last_out'],
@@ -103,6 +105,8 @@ class StockReportExportService
             'outgoing' => $line->outgoing,
             'closing' => $line->closing,
             'per_day' => round($line->perDay(), 2),
+            'velocity_30_days' => round($line->velocity30Days(), 2),
+            'movement_class' => $line->movementBadge()['label'],
             'turnover' => $line->turnover() === null ? '-' : round($line->turnover(), 2),
             'cover' => $line->daysOfCover() === null ? '-' : round($line->daysOfCover(), 1),
             'last_out' => $line->lastOutAt ? substr($line->lastOutAt, 0, 10) : '-',
@@ -136,8 +140,8 @@ class StockReportExportService
                 ->setBorderStyle(Border::BORDER_THIN)
                 ->getColor()->setRGB('D1D1D1');
 
-            // Seluruh kolom angka, dari stok awal sampai stok rusak.
-            foreach (range(5, 14) as $column) {
+            // Kolom angka; klasifikasi, tanggal, dan status tetap rata kiri.
+            foreach ([5, 6, 7, 8, 9, 10, 12, 13, 15, 16] as $column) {
                 $sheet->getStyle([$column, $headerRow + 1, $column, $lastRow])
                     ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
             }

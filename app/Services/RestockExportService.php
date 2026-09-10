@@ -34,6 +34,8 @@ class RestockExportService
         ['Tersedia', 'available'],
         ['Batas Menipis', 'min_stock'],
         ['Keluar/Hari', 'per_day'],
+        ['Kecepatan Setara 30 Hari', 'velocity_30_days'],
+        ['Klasifikasi Pergerakan', 'movement_class'],
         ['Perkiraan Habis (hari)', 'cover'],
         ['Saran Pesan', 'suggested'],
         ['Alasan', 'reason'],
@@ -104,6 +106,8 @@ class RestockExportService
             'available' => $line->available(),
             'min_stock' => $line->minStock,
             'per_day' => round($line->perDay(), 2),
+            'velocity_30_days' => round($line->velocity30Days(), 2),
+            'movement_class' => $line->movementBadge()['label'],
             'cover' => $line->daysOfCover() === null ? '-' : round($line->daysOfCover(), 1),
             'suggested' => $line->suggested(),
             'reason' => $line->reason(),
@@ -135,8 +139,8 @@ class RestockExportService
                 ->setBorderStyle(Border::BORDER_THIN)
                 ->getColor()->setRGB('D1D1D1');
 
-            // Kolom angka, dari stok sampai saran pesan.
-            foreach (range(6, 12) as $column) {
+            // Kolom angka; klasifikasi dan alasan tetap rata kiri.
+            foreach ([6, 7, 8, 9, 10, 11, 13, 14, 16] as $column) {
                 $sheet->getStyle([$column, $headerRow + 1, $column, $lastRow])
                     ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
             }

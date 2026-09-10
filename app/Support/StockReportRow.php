@@ -53,6 +53,25 @@ class StockReportRow
         return $this->outgoing / $this->days;
     }
 
+    /** Laju keluar yang disetarakan ke periode 30 hari untuk klasifikasi. */
+    public function velocity30Days(): float
+    {
+        return StockVelocity::equivalent30Days($this->outgoing, $this->days);
+    }
+
+    public function movementClass(): string
+    {
+        return StockVelocity::classify($this->outgoing, $this->days);
+    }
+
+    /**
+     * @return array{label: string, variant: string}
+     */
+    public function movementBadge(): array
+    {
+        return StockVelocity::badge($this->outgoing, $this->days);
+    }
+
     /**
      * Rata-rata stok yang ditahan selama periode.
      *

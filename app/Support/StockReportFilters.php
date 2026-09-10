@@ -25,7 +25,10 @@ class StockReportFilters
     public const VIEWS = [
         'semua' => 'Semua barang',
         'bergerak' => 'Yang bergerak',
-        'mati' => 'Tidak bergerak',
+        'fast' => 'Fast Moving',
+        'medium' => 'Medium Moving',
+        'slow' => 'Slow Moving',
+        'mati' => 'Non-Moving',
         'menipis' => 'Menipis & habis',
     ];
 

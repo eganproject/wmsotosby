@@ -57,6 +57,8 @@ class RestockReportTest extends TestCase
         $this->assertSame(30, $row->available());
         $this->assertEqualsWithDelta(1.0, $row->perDay(), 0.001);
         $this->assertFalse($row->isBelowMinimum(), 'Masih jauh di atas batas menipis.');
+        $this->assertSame('fast', $row->movementClass());
+        $this->assertSame('Fast Moving', $row->movementBadge()['label']);
         $this->assertSame(30, $row->suggested(), 'Butuh 60 unit untuk 60 hari, tersisa 30.');
         $this->assertSame('Menutup 60 hari ke depan', $row->reason());
     }
