@@ -81,6 +81,14 @@ class NavigationTest extends TestCase
         }
     }
 
+    public function test_the_waybill_group_offers_the_daily_report_tab(): void
+    {
+        $this->actingAs($this->admin)->get(route('admin.imports.status'))
+            ->assertOk()
+            ->assertSee('Per Hari')
+            ->assertSee(route('admin.imports.daily'));
+    }
+
     public function test_a_tab_the_user_may_not_open_is_never_offered(): void
     {
         $role = Role::create(['name' => 'Barang Saja', 'slug' => 'barang-saja']);

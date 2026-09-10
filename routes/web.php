@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\ApprovalController;
 use App\Http\Controllers\Admin\CourierReportController;
+use App\Http\Controllers\Admin\DailyWaybillReportController;
 use App\Http\Controllers\Admin\DamagedStockController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\InboundController;
@@ -120,6 +121,8 @@ Route::middleware('auth')
 
         // Import resi dari Ginee
         Route::get('imports/status', WaybillStatusController::class)->name('imports.status');
+        Route::get('imports/daily/export', [DailyWaybillReportController::class, 'export'])->name('imports.daily.export');
+        Route::get('imports/daily', [DailyWaybillReportController::class, 'index'])->name('imports.daily');
         Route::get('imports/couriers', CourierReportController::class)->name('imports.couriers');
         Route::post('imports/rematch', [ShipmentSkuMatchController::class, 'all'])->name('imports.rematch');
         Route::post('imports/orders/{order}/rematch', [ShipmentSkuMatchController::class, 'order'])->name('imports.orders.rematch');

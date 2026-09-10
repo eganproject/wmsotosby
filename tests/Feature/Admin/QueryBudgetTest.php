@@ -57,6 +57,7 @@ class QueryBudgetTest extends TestCase
             'barang rusak' => ['admin.disposals.index', 17],
             'import resi' => ['admin.imports.index', 16],
             'status resi' => ['admin.imports.status', 14],
+            'resi per hari' => ['admin.imports.daily', 16],
             'per ekspedisi' => ['admin.imports.couriers', 16],
             'persetujuan' => ['admin.approvals.index', 22],
             'pengguna' => ['admin.users.index', 14],
