@@ -199,7 +199,98 @@ class StockReportTest extends TestCase
 
         $this->assertCount(1, $rows->items());
         $this->assertSame('KMP-001', $rows->items()[0]->sku);
-        $this->assertSame(1, $this->summary()['idle']);
+        $this->assertSame(1, app(StockReportService::class)->classSummary($this->filters())['non_moving']['products']);
+    }
+
+    /**
+     * Fast Moving mengisi 70% qty keluar pertama, Medium lapisan 70–90%,
+     * Slow sisanya. Kelas ditentukan oleh titik mulai lapisannya.
+     */
+    public function test_goods_are_classified_by_cumulative_contribution(): void
+    {
+        $quantities = ['A' => 50, 'B' => 20, 'C' => 10, 'D' => 10, 'E' => 6, 'F' => 4];
+
+        foreach ($quantities as $sku => $quantity) {
+            $product = $this->makeProduct($sku, 'Barang '.$sku);
+            $this->receive($product, 100, Carbon::now()->subDays(20));
+            $this->ship($product, $quantity, Carbon::now()->subDays(10));
+        }
+
+        $rows = collect(app(StockReportService::class)->paginate($this->filters())->items())->keyBy('sku');
+
+        // Total 100. A mulai di 0% dan B di 50%: Fast. C dan D sama-sama
+        // mulai di 70% karena qty-nya sama: Medium. E mulai di 90%: Slow.
+        $this->assertSame('fast', $rows['A']->movementClass());
+        $this->assertSame('fast', $rows['B']->movementClass());
+        $this->assertSame('medium', $rows['C']->movementClass());
+        $this->assertSame('medium', $rows['D']->movementClass());
+        $this->assertSame('slow', $rows['E']->movementClass());
+        $this->assertSame('slow', $rows['F']->movementClass());
+        $this->assertSame('non_moving', $rows['FLT-OLI-STD']->movementClass());
+
+        $this->assertEqualsWithDelta(20.0, $rows['B']->share(), 0.001);
+        $this->assertSame('20,00%', $rows['B']->shareLabel());
+
+        $classes = app(StockReportService::class)->classSummary($this->filters());
+        $this->assertSame(['products' => 2, 'outgoing' => 70], array_slice($classes['fast'], 0, 2));
+        $this->assertSame(['products' => 2, 'outgoing' => 20], array_slice($classes['medium'], 0, 2));
+        $this->assertSame(['products' => 2, 'outgoing' => 10], array_slice($classes['slow'], 0, 2));
+        $this->assertSame(1, $classes['non_moving']['products']);
+
+        // Pencarian tidak mengubah kelas: B tetap Fast meskipun sendirian.
+        $searched = app(StockReportService::class)->paginate(StockReportFilters::fromRequest(Request::create('/', 'GET', [
+            'from' => Carbon::now()->subDays(29)->format('Y-m-d'),
+            'search' => 'Barang B',
+        ])));
+        $this->assertSame('fast', $searched->items()[0]->movementClass());
+    }
+
+    public function test_a_single_dominant_item_is_still_fast_moving(): void
+    {
+        $other = $this->makeProduct('KMP-001', 'Kampas Rem');
+
+        $this->receive($this->product, 100, Carbon::now()->subDays(20));
+        $this->receive($other, 100, Carbon::now()->subDays(20));
+        $this->ship($this->product, 90, Carbon::now()->subDays(10));
+        $this->ship($other, 10, Carbon::now()->subDays(10));
+
+        $rows = collect(app(StockReportService::class)->paginate($this->filters())->items())->keyBy('sku');
+
+        $this->assertSame('fast', $rows['FLT-OLI-STD']->movementClass());
+        $this->assertSame('slow', $rows['KMP-001']->movementClass());
+    }
+
+    /**
+     * Selisih opname bukan penjualan: ia menggerakkan saldo, tetapi tidak
+     * boleh membuat barang terlihat laku.
+     */
+    public function test_only_operational_outgoing_counts_toward_classification(): void
+    {
+        $this->receive($this->product, 100, Carbon::now()->subDays(20));
+
+        StockMovement::create([
+            'product_id' => $this->product->id,
+            'type' => 'out',
+            'bucket' => StockMovement::BUCKET_GOOD,
+            'quantity' => 5,
+            'balance_after' => 95,
+            'reference_type' => \App\Models\StockAdjustment::class,
+            'reference_id' => 1,
+            'description' => 'Selisih opname',
+        ]);
+        $this->product->forceFill(['stock' => 95])->save();
+
+        $this->ship($this->product, 3, Carbon::now()->subDays(5));
+        $this->ship($this->product, 2, Carbon::now()->subDays(2));
+
+        $row = $this->reportRow();
+
+        $this->assertSame(10, $row->outgoing, 'Saldo tetap memakai semua mutasi keluar.');
+        $this->assertSame(90, $row->closing);
+        $this->assertSame(5, $row->sold);
+        $this->assertSame(2, $row->frequency);
+        $this->assertEqualsWithDelta(90 / (5 / 30), $row->daysOfCover(), 0.001);
+        $this->assertSame(Carbon::now()->subDays(2)->toDateString(), substr($row->lastOutAt, 0, 10));
     }
 
     public function test_the_low_stock_view_lists_goods_at_or_below_the_minimum(): void
@@ -234,7 +325,7 @@ class StockReportTest extends TestCase
         $this->assertSame('KMP-001', $byCover->items()[0]->sku);
     }
 
-    public function test_goods_are_explicitly_classified_and_filterable_by_normalized_velocity(): void
+    public function test_each_class_can_be_viewed_on_its_own(): void
     {
         $fast = $this->makeProduct('FAST-001', 'Barang Cepat');
         $medium = $this->makeProduct('MED-001', 'Barang Sedang');

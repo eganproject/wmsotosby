@@ -3,7 +3,9 @@
 namespace App\Support;
 
 /**
- * Satu definisi klasifikasi kecepatan barang untuk seluruh laporan.
+ * Klasifikasi kecepatan barang berdasarkan ambang laju keluar, dipakai
+ * laporan restock. Laporan stok memakai kontribusi kumulatif (lihat
+ * StockContribution), tetapi nama dan warna kelasnya tetap diambil dari sini.
  *
  * Jumlah keluar dinormalisasi ke 30 hari. Tanpa normalisasi, barang yang sama
  * dapat berubah kelas hanya karena pengguna mengganti rentang laporan dari
@@ -73,8 +75,17 @@ class StockVelocity
      */
     public static function badge(int $outgoing, int $days): array
     {
-        $class = self::classify($outgoing, $days);
+        return self::badgeFor(self::classify($outgoing, $days));
+    }
 
+    /**
+     * Tampilan satu kelas, dipakai juga oleh klasifikasi kontribusi pada
+     * laporan stok supaya warna tiap kelas sama di semua halaman.
+     *
+     * @return array{label: string, variant: string}
+     */
+    public static function badgeFor(string $class): array
+    {
         return [
             'label' => self::classes()[$class],
             'variant' => match ($class) {

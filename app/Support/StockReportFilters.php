@@ -36,8 +36,9 @@ class StockReportFilters
      * @var array<string, string>
      */
     public const SORTS = [
-        'keluar' => 'Paling laku',
-        'sisa' => 'Paling cepat habis',
+        'keluar' => 'Kontribusi terbesar',
+        'frekuensi' => 'Paling sering keluar',
+        'sisa' => 'Days cover tersingkat',
         'masuk' => 'Paling banyak masuk',
         'stok' => 'Stok terbanyak',
         'nama' => 'Nama barang',

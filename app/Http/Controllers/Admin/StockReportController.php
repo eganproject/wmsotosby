@@ -41,6 +41,7 @@ class StockReportController extends Controller implements HasMiddleware
             'filters' => $filters,
             'rows' => $this->report->paginate($filters),
             'summary' => $this->report->summary($filters),
+            'classes' => $this->report->classSummary($filters),
             'categories' => $this->report->categories(),
         ]);
     }

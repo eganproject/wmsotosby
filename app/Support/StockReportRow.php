@@ -8,6 +8,10 @@ namespace App\Support;
  *
  * Angka turunan sengaja dihitung di sini, bukan di SQL: hasilnya sama untuk
  * tabel di layar maupun berkas export, dan rumusnya bisa dibaca sekali tempat.
+ *
+ * $outgoing adalah semua mutasi keluar dan hanya dipakai untuk saldo;
+ * $sold adalah barang keluar operasional yang dipakai untuk kecepatan,
+ * kontribusi, dan klasifikasi.
  */
 class StockReportRow
 {
@@ -25,10 +29,13 @@ class StockReportRow
         public readonly int $closing,
         public readonly ?string $lastOutAt,
         public readonly int $days,
+        public readonly int $sold,
+        public readonly int $frequency,
+        public readonly StockContribution $contribution,
     ) {
     }
 
-    public static function fromQuery(object $row, int $days): self
+    public static function fromQuery(object $row, int $days, StockContribution $contribution): self
     {
         return new self(
             id: (int) $row->id,
@@ -44,24 +51,38 @@ class StockReportRow
             closing: (int) $row->closing,
             lastOutAt: $row->last_out_at ?: null,
             days: $days,
+            sold: (int) $row->sold,
+            frequency: (int) $row->frequency,
+            contribution: $contribution,
         );
     }
 
-    /** Rata-rata unit yang keluar per hari selama periode. */
+    /** Rata-rata unit keluar operasional per hari selama periode. */
     public function perDay(): float
     {
-        return $this->outgoing / $this->days;
+        return $this->sold / $this->days;
     }
 
-    /** Laju keluar yang disetarakan ke periode 30 hari untuk klasifikasi. */
-    public function velocity30Days(): float
+    /** Porsi barang ini terhadap seluruh qty keluar operasional, dalam persen. */
+    public function share(): float
     {
-        return StockVelocity::equivalent30Days($this->outgoing, $this->days);
+        return $this->contribution->share($this->sold);
+    }
+
+    public function shareLabel(): string
+    {
+        $share = $this->share();
+
+        return match (true) {
+            $this->sold === 0 => '—',
+            $share < 0.01 => '< 0,01%',
+            default => number_format($share, 2, ',', '.').'%',
+        };
     }
 
     public function movementClass(): string
     {
-        return StockVelocity::classify($this->outgoing, $this->days);
+        return $this->contribution->classify($this->sold);
     }
 
     /**
@@ -69,7 +90,7 @@ class StockReportRow
      */
     public function movementBadge(): array
     {
-        return StockVelocity::badge($this->outgoing, $this->days);
+        return $this->contribution->badge($this->sold);
     }
 
     /**
@@ -92,7 +113,7 @@ class StockReportRow
     {
         $average = $this->averageStock();
 
-        return $average > 0 ? $this->outgoing / $average : null;
+        return $average > 0 ? $this->sold / $average : null;
     }
 
     /**
@@ -108,7 +129,7 @@ class StockReportRow
 
     public function isIdle(): bool
     {
-        return $this->outgoing === 0;
+        return $this->sold === 0;
     }
 
     public function isOutOfStock(): bool

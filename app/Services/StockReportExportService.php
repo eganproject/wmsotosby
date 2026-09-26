@@ -30,13 +30,15 @@ class StockReportExportService
         ['Satuan', 'unit'],
         ['Stok Awal', 'opening'],
         ['Masuk', 'incoming'],
-        ['Keluar', 'outgoing'],
+        ['Keluar (semua mutasi)', 'outgoing'],
         ['Stok Akhir', 'closing'],
+        ['Qty Keluar Operasional', 'sold'],
         ['Rata-rata Keluar/Hari', 'per_day'],
-        ['Kecepatan Setara 30 Hari', 'velocity_30_days'],
+        ['Kontribusi (%)', 'share'],
+        ['Frequency (dokumen)', 'frequency'],
         ['Klasifikasi Pergerakan', 'movement_class'],
         ['Perputaran (kali)', 'turnover'],
-        ['Perkiraan Habis (hari)', 'cover'],
+        ['Days Cover (hari)', 'cover'],
         ['Terakhir Keluar', 'last_out'],
         ['Stok Minimum', 'min_stock'],
         ['Stok Rusak', 'damaged'],
@@ -104,8 +106,10 @@ class StockReportExportService
             'incoming' => $line->incoming,
             'outgoing' => $line->outgoing,
             'closing' => $line->closing,
+            'sold' => $line->sold,
             'per_day' => round($line->perDay(), 2),
-            'velocity_30_days' => round($line->velocity30Days(), 2),
+            'share' => round($line->share(), 2),
+            'frequency' => $line->frequency,
             'movement_class' => $line->movementBadge()['label'],
             'turnover' => $line->turnover() === null ? '-' : round($line->turnover(), 2),
             'cover' => $line->daysOfCover() === null ? '-' : round($line->daysOfCover(), 1),
@@ -141,7 +145,7 @@ class StockReportExportService
                 ->getColor()->setRGB('D1D1D1');
 
             // Kolom angka; klasifikasi, tanggal, dan status tetap rata kiri.
-            foreach ([5, 6, 7, 8, 9, 10, 12, 13, 15, 16] as $column) {
+            foreach ([5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 17, 18] as $column) {
                 $sheet->getStyle([$column, $headerRow + 1, $column, $lastRow])
                     ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
             }
