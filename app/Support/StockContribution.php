@@ -30,10 +30,14 @@ class StockContribution
 
     public const MEDIUM_SHARE = 0.90;
 
+    /**
+     * @param  array<int, int>  $through  Porsi kumulatif (unit) sampai dengan tiap qty keluar, kunci = qty.
+     */
     public function __construct(
         public readonly int $total,
         public readonly int $fastMin,
         public readonly int $mediumMin,
+        protected readonly array $through = [],
     ) {
     }
 
@@ -55,6 +59,7 @@ class StockContribution
         // qty mana pun membuat semua barang jatuh ke Non-Moving.
         $fastMin = $mediumMin = PHP_INT_MAX;
         $above = 0;
+        $through = [];
 
         foreach ($levels as $level) {
             if ($above < $total * self::FAST_SHARE) {
@@ -66,9 +71,10 @@ class StockContribution
             }
 
             $above += $level['quantity'] * $level['products'];
+            $through[$level['quantity']] = $above;
         }
 
-        return new self($total, $fastMin, $mediumMin);
+        return new self($total, $fastMin, $mediumMin, $through);
     }
 
     public function classify(int $outgoing): string
@@ -93,6 +99,21 @@ class StockContribution
     public function share(int $outgoing): float
     {
         return $this->total > 0 ? $outgoing / $this->total * 100 : 0.0;
+    }
+
+    /**
+     * Kontribusi kumulatif sampai dengan barang ini, dalam persen.
+     *
+     * Barang dengan qty sama berbagi satu angka, yaitu ujung lapisan mereka
+     * bersama, supaya angkanya tidak bergantung pada urutan abjad.
+     */
+    public function cumulativeShare(int $outgoing): ?float
+    {
+        if ($outgoing <= 0 || $this->total <= 0 || ! isset($this->through[$outgoing])) {
+            return null;
+        }
+
+        return $this->through[$outgoing] / $this->total * 100;
     }
 
     public static function ruleLabel(): string

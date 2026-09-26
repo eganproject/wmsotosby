@@ -78,6 +78,22 @@ class StockReportFilters
     }
 
     /**
+     * Saringan yang sama dengan sudut pandang atau urutan lain — dipakai
+     * export untuk ringkasan yang harus mencakup semua kelas sekaligus.
+     */
+    public function with(?string $view = null, ?string $sort = null): self
+    {
+        return new self(
+            from: $this->from,
+            to: $this->to,
+            search: $this->search,
+            category: $this->category,
+            view: $view ?? $this->view,
+            sort: $sort ?? $this->sort,
+        );
+    }
+
+    /**
      * Jumlah hari dalam periode. Minimal satu, supaya rata-rata harian tidak
      * pernah membagi dengan nol.
      */

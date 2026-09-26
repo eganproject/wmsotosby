@@ -148,7 +148,7 @@ class StockReportService
      * yang sedang dilihat — kartu Fast Moving tidak boleh menjadi nol hanya
      * karena pengguna sedang membuka daftar Slow Moving.
      *
-     * @return array<string, array{products: int, outgoing: int, share: float}>
+     * @return array<string, array{products: int, outgoing: int, closing: int, share: float}>
      */
     public function classSummary(StockReportFilters $filters): array
     {
@@ -166,7 +166,8 @@ class StockReportService
 
         foreach ($conditions as $class => [$condition, $bindings]) {
             $query->selectRaw("COALESCE(SUM(CASE WHEN {$condition} THEN 1 ELSE 0 END), 0) as {$class}_products", $bindings)
-                ->selectRaw("COALESCE(SUM(CASE WHEN {$condition} THEN {$sold} ELSE 0 END), 0) as {$class}_outgoing", $bindings);
+                ->selectRaw("COALESCE(SUM(CASE WHEN {$condition} THEN {$sold} ELSE 0 END), 0) as {$class}_outgoing", $bindings)
+                ->selectRaw("COALESCE(SUM(CASE WHEN {$condition} THEN ".self::CLOSING." ELSE 0 END), 0) as {$class}_closing", $bindings);
         }
 
         $row = $query->first();
@@ -177,6 +178,7 @@ class StockReportService
             return [$class => [
                 'products' => (int) ($row->{$class.'_products'} ?? 0),
                 'outgoing' => $outgoing,
+                'closing' => (int) ($row->{$class.'_closing'} ?? 0),
                 'share' => $contribution->share($outgoing),
             ]];
         })->all();

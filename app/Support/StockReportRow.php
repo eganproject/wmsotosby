@@ -69,6 +69,12 @@ class StockReportRow
         return $this->contribution->share($this->sold);
     }
 
+    /** Kontribusi kumulatif sampai dengan barang ini, dalam persen. Null bila tidak keluar. */
+    public function cumulativeShare(): ?float
+    {
+        return $this->contribution->cumulativeShare($this->sold);
+    }
+
     public function shareLabel(): string
     {
         $share = $this->share();

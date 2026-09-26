@@ -401,6 +401,69 @@ class StockReportTest extends TestCase
     }
 
     /**
+     * Berkas export adalah buku kerja analitik: ringkasan, detail, Pareto,
+     * daftar tindakan, dan keterangan — dengan angka yang sama seperti layar.
+     */
+    public function test_the_export_is_an_analytic_workbook(): void
+    {
+        $idle = $this->makeProduct('KMP-001', 'Kampas Rem');
+        $slow = $this->makeProduct('BSI-001', 'Busi');
+
+        $this->receive($this->product, 100, Carbon::now()->subDays(20));
+        $this->receive($idle, 40, Carbon::now()->subDays(20));
+        $this->receive($slow, 500, Carbon::now()->subDays(20));
+        $this->ship($this->product, 95, Carbon::now()->subDays(10));
+        $this->ship($slow, 5, Carbon::now()->subDays(10));
+
+        $this->actingAs($this->admin);
+        $filters = $this->filters(view: 'fast');
+        $spreadsheet = app(\App\Services\StockReportExportService::class)
+            ->build(app(StockReportService::class), $filters);
+
+        $this->assertSame(
+            ['Ringkasan', 'Detail per SKU', 'Analisis Pareto', 'Perlu Tindakan', 'Keterangan'],
+            $spreadsheet->getSheetNames(),
+        );
+
+        // Ringkasan mencakup semua kelas meskipun layar sedang menyaring Fast.
+        $summary = $this->sheetText($spreadsheet->getSheetByName('Ringkasan'));
+        $this->assertStringContainsString('Rekap Klasifikasi Pergerakan', $summary);
+        $this->assertStringContainsString('Non-Moving', $summary);
+        $this->assertStringContainsString('Temuan Utama', $summary);
+        $this->assertCount(1, $spreadsheet->getSheetByName('Ringkasan')->getChartCollection());
+
+        // Detail mengikuti saringan layar: hanya yang Fast Moving.
+        $detail = $spreadsheet->getSheetByName('Detail per SKU');
+        $this->assertSame('FLT-OLI-STD', $detail->getCell('B5')->getValue());
+        $this->assertNull($detail->getCell('B6')->getValue());
+        $this->assertEqualsWithDelta(0.95, $detail->getCell('M5')->getValue(), 0.0001);
+
+        // Pareto hanya berisi barang bergerak, urut kontribusi.
+        $pareto = $spreadsheet->getSheetByName('Analisis Pareto');
+        $this->assertSame('FLT-OLI-STD', $pareto->getCell('B6')->getValue());
+        $this->assertSame('BSI-001', $pareto->getCell('B7')->getValue());
+        $this->assertEqualsWithDelta(1.0, $pareto->getCell('H7')->getValue(), 0.0001);
+
+        // Stok mati dan stok berlebih muncul di daftar tindakan.
+        $actions = $this->sheetText($spreadsheet->getSheetByName('Perlu Tindakan'));
+        $this->assertStringContainsString('KMP-001', $actions);
+        $this->assertStringContainsString('BSI-001', $actions);
+
+        // Berkasnya benar-benar bisa ditulis, termasuk grafiknya.
+        $path = tempnam(sys_get_temp_dir(), 'xlsx');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->setIncludeCharts(true);
+        $writer->save($path);
+        $this->assertGreaterThan(0, filesize($path));
+        @unlink($path);
+    }
+
+    protected function sheetText(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): string
+    {
+        return collect($sheet->toArray(null, false, false))->flatten()->filter()->implode(' | ');
+    }
+
+    /**
      * Laporan adalah halaman yang justru dibuka saat datanya sudah banyak,
      * jadi jumlah query-nya tidak boleh tumbuh mengikuti jumlah barang.
      */
